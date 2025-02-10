@@ -1,0 +1,6 @@
+[submodule "third_party/jolt"]
+	path = third_party/jolt
+	url = https://github.com/jrouwe/JoltPhysics.git
+[submodule "third_party/vultron"]
+	path = third_party/vultron
+	url = https://github.com/Dualsub/vultron.git

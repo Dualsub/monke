@@ -1,0 +1,12 @@
+build/
+# assets_backup/
+dist/
+logs/
+.ideas/
+.env
+*.zip
+tools/*.ipynb
+
+tools/.venv/
+third_party/steamworkssdk/
+third_party/fmod/

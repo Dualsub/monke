@@ -1,0 +1,62 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(arcanesiege)
+
+set(CMAKE_CXX_STANDARD 20)
+
+# Get the current version of the project from file
+file(READ "VERSION" VERSION)
+# Set executable name
+set(EXECUTABLE_NAME "${PROJECT_NAME}_v${VERSION}")
+
+# # Define the asset directory for the project
+# set(ACS_ASSET_DIR "./assets")
+# set(VLT_ASSET_DIR "${ACS_ASSET_DIR}")
+
+add_subdirectory(third_party)
+
+# Add the version to the executable name
+
+add_executable(arcanesiege WIN32
+    src/main.cpp
+    src/Core/Core.cpp
+    src/Application.cpp
+    src/Game/Game.cpp
+    src/Game/SceneDescription.cpp
+    src/Physics/PhysicsWorld.cpp
+    src/Physics/Layers.cpp
+    src/Input/InputDevice.cpp
+    src/Audio/AudioSystem.cpp
+    src/UI/Layout.cpp
+
+)
+
+target_link_libraries(arcanesiege PRIVATE Vultron Jolt fmod)
+target_include_directories(arcanesiege PRIVATE include)
+set_target_properties(arcanesiege PROPERTIES OUTPUT_NAME ${EXECUTABLE_NAME})
+
+set(DLLS
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmod/studio/lib/x64/fmodstudio.dll
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmod/core/lib/x64/fmod.dll
+)
+
+foreach(dll ${DLLS})
+    add_custom_command(TARGET arcanesiege POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${dll}
+        ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/)
+endforeach()
+
+# Set if not defined externally
+if(NOT DEFINED ACS_ASSET_DIR)
+    set(ACS_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets") 
+endif()
+
+if(NOT DEFINED VLT_ASSET_DIR)
+    set(VLT_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/Vultron/vultron/assets")
+endif()
+
+message(STATUS "ACS_ASSETS_DIR: ${ACS_ASSET_DIR}")
+
+target_compile_definitions(arcanesiege PUBLIC ACS_VERSION="${VERSION}"  $<$<CONFIG:Debug>:DEBUG> ACS_ASSETS_DIR="${ACS_ASSET_DIR}")
+target_compile_definitions(Vultron PUBLIC VLT_ENABLE_VALIDATION_LAYERS=1 VLT_ASSETS_DIR="${VLT_ASSET_DIR}")

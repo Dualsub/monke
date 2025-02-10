@@ -1,0 +1,10 @@
+add_subdirectory(vultron/Vultron)
+add_subdirectory(vultron/Vultron/tools/env_map_gen)
+
+# Create interface library for FMOD
+add_library(fmod INTERFACE)
+target_include_directories(fmod INTERFACE  ${CMAKE_CURRENT_SOURCE_DIR}/fmod/studio/inc ${CMAKE_CURRENT_SOURCE_DIR}/fmod/core/inc)
+target_link_libraries(fmod INTERFACE  ${CMAKE_CURRENT_SOURCE_DIR}/fmod/studio/lib/x64/fmodstudio_vc.lib ${CMAKE_CURRENT_SOURCE_DIR}/fmod/core/lib/x64/fmod_vc.lib)
+
+set(PHYSICS_REPO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/jolt)
+include(${CMAKE_CURRENT_SOURCE_DIR}/jolt/Jolt/Jolt.cmake)
