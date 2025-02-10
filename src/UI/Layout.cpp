@@ -1,9 +1,8 @@
 #include "UI/Layout.h"
 
-// This should be moved to the UI side
-#include "Game/Helpers/UIHelper.h"
+#include "UI/UIHelper.h"
 
-namespace ACS::Layout
+namespace mk::Layout
 {
     Container::UIElement Conditional(const bool condition, const Container::UIElement &element)
     {

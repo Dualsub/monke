@@ -15,7 +15,7 @@
 #include <cstdarg>
 #include <thread>
 
-namespace ACS
+namespace mk
 {
 
     using namespace JPH::literals;
@@ -104,7 +104,7 @@ namespace ACS
             JoltHelpers::ConvertWithUnits(position),
             JoltHelpers::Convert(rotation),
             JoltHelpers::ConvertWithUnits(linearVelocity),
-            JoltHelpers::Convert(angularVelocity) };
+            JoltHelpers::Convert(angularVelocity)};
     }
 
     glm::vec3 PhysicsWorld::GetPosition(BodyID id)
@@ -131,7 +131,7 @@ namespace ACS
         JPH::BodyInterface &interface = m_physicsSystem->GetBodyInterfaceNoLock();
 
         static_assert(sizeof(UserData) == sizeof(JPH::uint64), "UserData must be 64 bits");
-        UserData userData{ id, info.data };
+        UserData userData{id, info.data};
         uint64_t userDataBits = *reinterpret_cast<uint64_t *>(&userData); // :) I know
 
         // Creating shape
@@ -141,12 +141,12 @@ namespace ACS
             info.shape);
         JPH::ShapeRefC shape = shapeResult.Get();
 
-        m_collisions[id] = { info.shape, info.layer };
+        m_collisions[id] = {info.shape, info.layer};
 
         if (type == BodyType::Rigidbody)
         {
             JPH::ObjectLayer layer = info.layer != ObjectLayer::None ? static_cast<JPH::ObjectLayer>(info.layer) : info.mass > 0.0f ? Layers::MOVING
-                : Layers::NON_MOVING;
+                                                                                                                                    : Layers::NON_MOVING;
             JPH::EMotionType motionType = info.mass > 0.0f ? JPH::EMotionType::Dynamic : JPH::EMotionType::Static;
 
             JPH::BodyCreationSettings settings(shape, JoltHelpers::ConvertWithUnits(info.position), JoltHelpers::Convert(info.rotation), motionType, layer);

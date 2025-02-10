@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-namespace ACS
+namespace mk
 {
     bool InputDevice::Initialize(Window &window)
     {

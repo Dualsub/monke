@@ -18,7 +18,7 @@
 #define SL_MAX_PHYSICS_BODIES 512
 #define INVALID_BODY_ID -1
 
-namespace ACS
+namespace mk
 {
     enum class ObjectLayer : uint32_t
     {

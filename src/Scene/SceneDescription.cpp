@@ -5,7 +5,7 @@
 #include <fstream>
 #include <set>
 
-namespace ACS
+namespace mk
 {
     void ReadString(std::ifstream &file, std::string &str)
     {

@@ -6,7 +6,7 @@
 #include "Jolt/Physics/PhysicsSystem.h"
 #include "Jolt/Physics/Body/BodyInterface.h"
 
-namespace ACS
+namespace mk
 {
 
     // Layer that objects can be in, determines which other objects it can collide with

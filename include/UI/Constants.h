@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace ACS
+namespace mk
 {
     constexpr glm::vec4 c_defaultBackgroundColor = glm::vec4(0.08f, 0.08f, 0.08f, 0.75f);
     constexpr glm::vec4 c_dimBackgroundColor = glm::vec4(0.08f, 0.08f, 0.08f, 0.25f);

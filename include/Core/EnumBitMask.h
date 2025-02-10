@@ -1,7 +1,7 @@
 #pragma once
 #include <type_traits>
 
-namespace ACS
+namespace mk
 {
     template <typename Enum>
     struct EnableBitMaskOperators

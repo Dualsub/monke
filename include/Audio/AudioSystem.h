@@ -13,7 +13,7 @@
 #undef CreateEvent
 #endif
 
-namespace ACS
+namespace mk
 {
     enum class BankType
     {

@@ -12,23 +12,23 @@ void RedirectOutputToFile()
     }
 
     // Open a file stream to redirect output
-    static std::ofstream out("./logs/acs_output.log");
+    static std::ofstream out("./logs/MK_output.log");
     if (out.is_open())
     {
         std::cout.rdbuf(out.rdbuf()); // Redirect std::cout to the file
     }
-    std::cout << " -- ACS Engine Output Log -- " << std::endl;
-    static std::ofstream err("./logs/acs_error.log");
+    std::cout << " -- Output Log -- " << std::endl;
+    static std::ofstream err("./logs/MK_error.log");
     if (err.is_open())
     {
         std::cerr.rdbuf(err.rdbuf()); // Redirect std::cerr to the file
     }
-    std::cerr << " -- ACS Engine Error Log -- " << std::endl;
+    std::cerr << " -- Error Log -- " << std::endl;
 }
 
 int MainImpl(int argc, char **argv)
 {
-    ACS::Application app;
+    mk::Application app;
     return app.Run(argc, argv);
 }
 

@@ -8,7 +8,7 @@
 #include <limits>
 #include <algorithm>
 
-namespace ACS
+namespace mk
 {
     class Bounds
     {

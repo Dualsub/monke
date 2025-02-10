@@ -3,7 +3,7 @@
 #include "Core/Core.h"
 #include <limits>
 
-namespace ACS
+namespace mk
 {
     template <float t_duration, bool t_loop>
     class Timer

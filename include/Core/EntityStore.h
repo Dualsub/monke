@@ -12,7 +12,7 @@
 #include <limits>
 #include <cstring>
 
-namespace ACS
+namespace mk
 {
     //============================================================
     // Allocator and CustomAllocator
@@ -398,9 +398,9 @@ namespace ACS
     // // Test: Create entities with a single component and retrieve it
     // void TestSingleComponent()
     // {
-    //     ACS::EntityStore store;
-    //     ACS::Entity e1 = store.CreateEntity(Position{10.0f, 20.0f});
-    //     ACS::Entity e2 = store.CreateEntity(Position{30.0f, 40.0f});
+    //     mk::EntityStore store;
+    //     mk::Entity e1 = store.CreateEntity(Position{10.0f, 20.0f});
+    //     mk::Entity e2 = store.CreateEntity(Position{30.0f, 40.0f});
 
     //     // Retrieve and check components
     //     Position &p1 = store.GetComponent<Position>(e1);
@@ -414,8 +414,8 @@ namespace ACS
     // // Test: Create entities with multiple components and retrieve them
     // void TestMultipleComponents()
     // {
-    //     ACS::EntityStore store;
-    //     ACS::Entity e = store.CreateEntity(
+    //     mk::EntityStore store;
+    //     mk::Entity e = store.CreateEntity(
     //         Position{5.0f, 15.0f},
     //         Velocity{1.0f, 0.5f},
     //         Health{100});
@@ -434,10 +434,10 @@ namespace ACS
     // // Test: Destroying entities
     // void TestDestroyEntity()
     // {
-    //     ACS::EntityStore store;
-    //     ACS::Entity e1 = store.CreateEntity(Position{1.0f, 2.0f});
-    //     ACS::Entity e2 = store.CreateEntity(Position{3.0f, 4.0f});
-    //     ACS::Entity e3 = store.CreateEntity(Position{5.0f, 6.0f});
+    //     mk::EntityStore store;
+    //     mk::Entity e1 = store.CreateEntity(Position{1.0f, 2.0f});
+    //     mk::Entity e2 = store.CreateEntity(Position{3.0f, 4.0f});
+    //     mk::Entity e3 = store.CreateEntity(Position{5.0f, 6.0f});
 
     //     // Ensure initial state
     //     assert(store.GetComponent<Position>(e1).x == 1.0f);
@@ -461,7 +461,7 @@ namespace ACS
     // // Test: ForEach iteration
     // void TestForEach()
     // {
-    //     ACS::EntityStore store;
+    //     mk::EntityStore store;
     //     store.CreateEntity(Position{1.0f, 2.0f}, Velocity{0.1f, 0.2f});
     //     store.CreateEntity(Position{3.0f, 4.0f}, Velocity{0.3f, 0.4f});
     //     store.CreateEntity(Position{5.0f, 6.0f}, Velocity{0.5f, 0.6f});
@@ -481,8 +481,8 @@ namespace ACS
     // // Test: Modify components after creation
     // void TestModifyComponents()
     // {
-    //     ACS::EntityStore store;
-    //     ACS::Entity e = store.CreateEntity(Position{1.0f, 1.0f});
+    //     mk::EntityStore store;
+    //     mk::Entity e = store.CreateEntity(Position{1.0f, 1.0f});
 
     //     // Modify the component
     //     Position &p = store.GetComponent<Position>(e);
@@ -505,4 +505,4 @@ namespace ACS
     //     TestModifyComponents();
     // }
 
-} // namespace ACS
+} // namespace mk

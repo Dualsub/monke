@@ -5,7 +5,7 @@
 
 #include <glm/glm.hpp>
 
-namespace ACS::Layout
+namespace mk::Layout
 {
     template <typename T, typename F>
     std::vector<Container::UIElement> Map(const T &input, const F &mapper)

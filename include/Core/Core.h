@@ -15,7 +15,7 @@
 #include <numeric>
 #include <limits>
 
-namespace ACS
+namespace mk
 {
     uint32_t GetHandle(const std::string_view &input);
 

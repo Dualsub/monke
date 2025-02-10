@@ -12,7 +12,7 @@
 
 using namespace Vultron;
 
-namespace ACS
+namespace mk
 {
     Application *Application::s_instance = nullptr;
 

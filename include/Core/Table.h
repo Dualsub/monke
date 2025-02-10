@@ -8,7 +8,7 @@
     template <>                          \
     const RowType Table<EnumType, RowType>::s_rows[] =
 
-namespace ACS
+namespace mk
 {
     template <typename EnumType, typename RowType>
     class Table

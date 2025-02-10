@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-namespace ACS
+namespace mk
 {
 
 #ifdef JPH_ENABLE_ASSERTS

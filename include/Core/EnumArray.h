@@ -2,7 +2,7 @@
 
 #include <array>
 
-namespace ACS
+namespace mk
 {
     template <typename Enum, typename T>
     class EnumArray

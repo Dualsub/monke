@@ -11,7 +11,7 @@
 #include <iomanip>
 #include <optional>
 
-namespace ACS
+namespace mk
 {
     constexpr uint32_t c_maxMessages = 16;
     constexpr float c_messageDuration = 5.0f;

@@ -6,7 +6,7 @@
 
 #include <cstdint>
 
-namespace ACS::JoltHelpers
+namespace mk::JoltHelpers
 {
 
     const float spaceScale = 100.0f;

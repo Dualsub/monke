@@ -3,7 +3,7 @@
 #include <variant>
 #include <optional>
 
-namespace ACS
+namespace mk
 {
     template <typename... States>
     class StateMachine

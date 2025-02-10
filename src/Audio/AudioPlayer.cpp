@@ -5,7 +5,7 @@
 #include <iostream>
 #include <random>
 
-namespace ACS
+namespace mk
 {
     static std::random_device s_randomDevice;
     static std::mt19937 s_randomEngine(s_randomDevice());

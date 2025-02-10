@@ -15,10 +15,11 @@
 #include <variant>
 #include <vector>
 #include <random>
+#include <future>
 
 using namespace Vultron;
 
-namespace ACS
+namespace mk
 {
 
     constexpr float c_fixedUpdateInterval = 1.0f / 60.0f;
@@ -62,7 +63,6 @@ namespace ACS
         InputDevice m_inputDevice;
         AudioSystem m_audioSystem;
         Game m_game;
-        std::vector<Game::EventType> m_eventQueue;
         EventBus m_eventBus;
         Game::PersistentDataType m_persistentData;
 

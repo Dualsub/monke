@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace ACS
+namespace mk
 {
     using BodyID = uint32_t;
     constexpr BodyID c_invalidBodyID = -1;
