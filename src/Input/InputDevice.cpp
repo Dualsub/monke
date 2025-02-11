@@ -19,17 +19,10 @@ namespace mk
 
         m_keyMapping[InputActionType::Aim] = GLFW_KEY_RIGHT;
         m_keyMapping[InputActionType::Attack] = GLFW_KEY_LEFT;
-        m_keyMapping[InputActionType::Dash] = GLFW_KEY_SPACE;
+        m_keyMapping[InputActionType::Jump] = GLFW_KEY_SPACE;
+        m_keyMapping[InputActionType::Dash] = GLFW_KEY_LEFT_SHIFT;
         m_keyMapping[InputActionType::Reload] = GLFW_KEY_R;
-        m_keyMapping[InputActionType::Pause] = GLFW_KEY_ESCAPE;
-        m_keyMapping[InputActionType::OpenShop] = GLFW_KEY_B;
-        m_keyMapping[InputActionType::OpenLevelUp] = GLFW_KEY_I;
-        m_keyMapping[InputActionType::ToggleAutoAim] = GLFW_KEY_TAB;
-
-        m_keyMapping[InputActionType::Ability1] = GLFW_KEY_Q;
-        m_keyMapping[InputActionType::Ability2] = GLFW_KEY_E;
-        m_keyMapping[InputActionType::Ability3] = GLFW_KEY_F;
-        m_keyMapping[InputActionType::Ability4] = GLFW_KEY_G;
+        m_keyMapping[InputActionType::Escape] = GLFW_KEY_ESCAPE;
 
         return true;
     }
@@ -184,7 +177,7 @@ namespace mk
 
                 // Get Pause button state
                 bool value = static_cast<bool>(gamepadState.buttons[GLFW_GAMEPAD_BUTTON_START]);
-                state.OrSet(value, InputActionType::Pause);
+                state.OrSet(value, InputActionType::Escape);
                 action |= value;
 
                 // Get Reload button state
@@ -202,24 +195,9 @@ namespace mk
                 state.OrSet(value, InputActionType::Dash);
                 action |= value;
 
-                // Get AutoAim button state
-                value = static_cast<bool>(gamepadState.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_THUMB]);
-                state.OrSet(value, InputActionType::ToggleAutoAim);
-                action |= value;
-
-                // Ability1
-                value = static_cast<bool>(gamepadState.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER]);
-                state.OrSet(value, InputActionType::Ability1);
-                action |= value;
-
-                // Shop
+                // Get Jump button state
                 value = static_cast<bool>(gamepadState.buttons[GLFW_GAMEPAD_BUTTON_A]);
-                state.OrSet(value, InputActionType::OpenShop);
-                action |= value;
-
-                // LevelUp
-                value = static_cast<bool>(gamepadState.buttons[GLFW_GAMEPAD_BUTTON_BACK]);
-                state.OrSet(value, InputActionType::OpenLevelUp);
+                state.OrSet(value, InputActionType::Jump);
                 action |= value;
             }
 

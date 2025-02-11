@@ -212,7 +212,6 @@ namespace mk::Layout
             position,
             text.fontSize * scale,
             color * glm::vec4(1.0f, 1.0f, 1.0f, opacity),
-            aspectRatio.y,
             text.alignment,
             text.centerVertically,
             text.maxLineLength,

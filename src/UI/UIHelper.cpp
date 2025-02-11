@@ -59,11 +59,12 @@ namespace mk::UIHelper
         return hash;
     }
 
-    glm::vec4 RenderLine(const SceneRenderer &renderer, UIContext &context, const std::string &text, const glm::vec2 &position, float size, const glm::vec4 &color, float aspectRatio, TextAlignment alignment, bool centerVertically)
+    glm::vec4 RenderLine(const SceneRenderer &renderer, UIContext &context, const std::string &text, const glm::vec2 &position, float size, const glm::vec4 &color, TextAlignment alignment, bool centerVertically)
     {
         std::vector<FontGlyph> glyphs = renderer.GetTextGlyphs(context.fontAtlas, text);
 
         const float c_scale = 1.0f / 5.0f;
+        const float aspectRatio = renderer.GetAspectRatio();
         float heightOffset = centerVertically ? renderer.GetGlyph(context.fontAtlas, "A").uvExtent.y / 2.0f * size * c_scale * aspectRatio : 0.0f;
 
         float totalWidth = 0.0f;
@@ -163,7 +164,7 @@ namespace mk::UIHelper
         return lines;
     }
 
-    glm::vec4 RenderText(const SceneRenderer &renderer, UIContext &context, const std::string &text, const glm::vec2 &position, float size, const glm::vec4 &color, float aspectRatio, TextAlignment alignment, bool centerVertically, uint32_t maxLineLength, float lineSpacing)
+    glm::vec4 RenderText(const SceneRenderer &renderer, UIContext &context, const std::string &text, const glm::vec2 &position, float size, const glm::vec4 &color, TextAlignment alignment, bool centerVertically, uint32_t maxLineLength, float lineSpacing)
     {
         std::vector<std::string> lines;
 
@@ -183,7 +184,7 @@ namespace mk::UIHelper
 
         for (uint32_t i = 0; i < lines.size(); i++)
         {
-            glm::vec4 minMax = RenderLine(renderer, context, lines[i], startPosition + glm::vec2(0.0f, i * lineSpacing * size), size, color, aspectRatio, alignment, centerVertically);
+            glm::vec4 minMax = RenderLine(renderer, context, lines[i], startPosition + glm::vec2(0.0f, i * lineSpacing * size), size, color, alignment, centerVertically);
             min = glm::min(min, glm::vec2(minMax.x, minMax.y));
             max = glm::max(max, glm::vec2(minMax.z, minMax.w));
         }
@@ -191,14 +192,14 @@ namespace mk::UIHelper
         return glm::vec4(min, max);
     }
 
-    glm::vec4 RenderText(SceneRenderer &renderer, RenderHandle fontAtlas, RenderHandle fontMaterial, const std::string &text, const glm::vec2 &position, float size, const glm::vec4 &color, float aspectRatio, TextAlignment alignment, bool centerVertically, uint32_t maxLineLength, float lineSpacing)
+    glm::vec4 RenderText(SceneRenderer &renderer, RenderHandle fontAtlas, RenderHandle fontMaterial, const std::string &text, const glm::vec2 &position, float size, const glm::vec4 &color, TextAlignment alignment, bool centerVertically, uint32_t maxLineLength, float lineSpacing)
     {
         UIContext context{
             .fontAtlas = fontAtlas,
             .fontMaterial = fontMaterial,
         };
 
-        glm::vec4 bounds = RenderText(renderer, context, text, position, size, color, aspectRatio, alignment, centerVertically, maxLineLength, lineSpacing);
+        glm::vec4 bounds = RenderText(renderer, context, text, position, size, color, alignment, centerVertically, maxLineLength, lineSpacing);
 
         for (const auto &job : context.renderJobs)
         {

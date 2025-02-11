@@ -22,11 +22,11 @@ namespace mk
         m_random.dis = std::uniform_real_distribution<float>(0.0f, 1.0f);
 
         Window::WindowCreateInfo windowCreateInfo = {
-            .title = "Arcane Siege",
-            .mode = Window::WindowMode::Fullscreen,
+            .title = "Monke",
+            .mode = Window::WindowMode::Windowed,
         };
 
-        if (m_cmdArgs.HasFlag("--windowed"))
+        if (m_cmdArgs.HasFlag("-windowed"))
         {
             windowCreateInfo.mode = Window::WindowMode::Windowed;
             windowCreateInfo.width = 1920;

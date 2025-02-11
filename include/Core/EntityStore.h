@@ -133,6 +133,8 @@ namespace mk
     using ComponentId = uint32_t;
     using DataBuffer = std::vector<uint8_t>;
 
+    constexpr Entity c_invalidEntity = std::numeric_limits<Entity>::max();
+
     //============================================================
     // Hash/Equality for ComponentBitset
     //============================================================
@@ -205,6 +207,12 @@ namespace mk
             return componentBitset;
         }
 
+        template <typename T>
+        constexpr size_t GetAlignedSize()
+        {
+            return (sizeof(T) + alignof(T) - 1) & ~(alignof(T) - 1);
+        }
+
     public:
         EntityStore() = default;
         ~EntityStore() = default;
@@ -218,14 +226,16 @@ namespace mk
             ComponentBitset componentBitset = GetComponentBitset<Components...>();
 
             size_t entitySize = 0;
-            ((entitySize += sizeof(Components)), ...);
+            ((entitySize += GetAlignedSize<Components>()), ...);
 
             auto it = m_archetypes.find(componentBitset);
             if (it == m_archetypes.end())
             {
-                std::array<int32_t, c_maxComponents> componentOffsets = {-1};
+                std::array<int32_t, c_maxComponents> componentOffsets;
+                componentOffsets.fill(-1);
+
                 int32_t offset = 0;
-                ((componentOffsets[GetComponentId<Components>()] = offset, offset += sizeof(Components)), ...);
+                ((componentOffsets[GetComponentId<Components>()] = offset, offset += GetAlignedSize<Components>()), ...);
 
                 Archetype archetype{
                     .componentOffsets = componentOffsets,
@@ -251,9 +261,9 @@ namespace mk
             // Copy each component into the data buffer at the correct offset
             ([&]
              {
-                const auto& comp = components;
-                size_t offset = archetype.componentOffsets[GetComponentId<Components>()];
-                std::memcpy(archetype.dataBuffer.data() + writePos + offset, &comp, sizeof(Components)); }(), ...);
+                    Components *ptr = reinterpret_cast<Components *>(archetype.dataBuffer.data() + writePos + archetype.componentOffsets[GetComponentId<Components>()]);
+                    new (ptr) Components(components); }(),
+             ...);
 
             EntityRecord entityRecord{
                 .entityIndex = entityIndex,
@@ -312,6 +322,11 @@ namespace mk
             }
         }
 
+        bool IsValidEntity(Entity entity)
+        {
+            return m_entities.find(entity) != m_entities.end();
+        }
+
         template <typename T>
         T &GetComponent(Entity entity)
         {
@@ -320,7 +335,20 @@ namespace mk
             size_t entityIndex = entityRecord.entityIndex;
             size_t entitySize = archetype.entitySize;
             size_t componentOffset = archetype.componentOffsets[GetComponentId<T>()];
-            return *reinterpret_cast<T *>(archetype.dataBuffer.data() + entityIndex * entitySize + componentOffset);
+            T *ptr = reinterpret_cast<T *>(archetype.dataBuffer.data() + entityIndex * entitySize + componentOffset);
+            return *ptr;
+        }
+
+        template <typename T>
+        bool HasComponent(Entity entity)
+        {
+            if (!IsValidEntity(entity))
+            {
+                return false;
+            }
+
+            EntityRecord &entityRecord = m_entities[entity];
+            return entityRecord.componentBitset.test(GetComponentId<T>());
         }
 
         template <typename... Components>

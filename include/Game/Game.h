@@ -1,7 +1,11 @@
 #pragma once
 
+#include "Game/StateMachines/GameStateMachine.h"
+
 #include <fstream>
 #include <cstdint>
+
+#define MK_ASSET_PATH(path) (MK_ASSETS_DIR "/" path)
 
 namespace Vultron
 {
@@ -35,6 +39,9 @@ namespace mk
         using PersistentDataType = PersistentData;
 
     private:
+        GameStateMachine m_stateMachine;
+        GameStateMachine::OptionalState m_queuedState;
+
     public:
         Game() = default;
         ~Game() = default;

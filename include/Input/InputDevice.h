@@ -17,17 +17,10 @@ namespace mk
     {
         Aim,
         Attack,
+        Jump,
         Dash,
         Reload,
-        Pause,
-        OpenShop,
-        OpenLevelUp,
-        ToggleAutoAim,
-
-        Ability1,
-        Ability2,
-        Ability3,
-        Ability4,
+        Escape,
 
         Option1,
         Option2,
@@ -54,7 +47,6 @@ namespace mk
     constexpr uint32_t c_numInputActions = static_cast<uint32_t>(InputActionType::Count);
     constexpr uint32_t c_numOptions = static_cast<uint32_t>(InputActionType::Option6) - static_cast<uint32_t>(InputActionType::Option1) + 1;
     constexpr uint32_t c_numDebugOptions = static_cast<uint32_t>(InputActionType::DebugOption7) - static_cast<uint32_t>(InputActionType::DebugOption1) + 1;
-    constexpr uint32_t c_numAbilities = static_cast<uint32_t>(InputActionType::Ability4) - static_cast<uint32_t>(InputActionType::Ability1) + 1;
 
     struct InputState
     {
