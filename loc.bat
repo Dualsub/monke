@@ -1,0 +1,1 @@
+..\..\bin\cloc-2.00.exe src\ include\ tools\*.py third_party\vultron\Vultron\src\ third_party\vultron\Vultron\include\ third_party\vultron\Vultron\tools\*.py third_party\vultron\Vultron\assets\shaders\ --exclude-ext=spv
