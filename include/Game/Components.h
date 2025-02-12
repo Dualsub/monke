@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Core/EntityStore.h"
 #include "Physics/Types.h"
 
 #include "Vultron/SceneRenderer.h"
@@ -18,7 +17,6 @@ namespace mk
         glm::vec3 position = glm::vec3(0.0f);
         glm::quat rotation = glm::identity<glm::quat>();
         glm::vec3 scale = glm::vec3(1.0f);
-        Entity parent = c_invalidEntity;
 
         glm::mat4 GetMatrix() const
         {

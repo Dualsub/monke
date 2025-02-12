@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Core/EntityStore.h"
 #include "Core/StateMachine.h"
 
 #include <future>
@@ -36,7 +35,6 @@ namespace mk
         struct PlayingState
         {
             bool shouldExitGame = false;
-            EntityStore entityStore;
         };
     }
 
