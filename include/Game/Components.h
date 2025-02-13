@@ -44,6 +44,7 @@ namespace mk
 
     struct CameraSocket
     {
+        float fov = 70.0f;
         float pitch = 0.0f;
     };
 
@@ -71,5 +72,31 @@ namespace mk
         float dashSpeed = 0.0f;
         float jumpSpeed = 0.0f;
         bool wantsToJump = false;
+    };
+
+    struct Animation
+    {
+        float time = 0.0f;
+        float duration;
+        bool loop = false;
+
+        struct KeyFrame
+        {
+            glm::vec3 position;
+            glm::quat rotation;
+            float time;
+        };
+
+        std::vector<KeyFrame> keyframes = {};
+    };
+
+    struct PlayerAnimations
+    {
+        Animation shootAnimation;
+    };
+
+    struct Lifetime
+    {
+        DynamicTimer timer = DynamicTimer(false);
     };
 }
