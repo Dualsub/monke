@@ -96,15 +96,37 @@ namespace mk
                     });
 
                 renderer.CreateMaterial<PBRMaterial>(
+                    "TestMaterial",
+                    {
+                        .albedo = renderer.LoadImage(MK_ASSET_PATH("textures/grid.dat"), ImageType::Texture2DArray),
+                        .normal = renderer.LoadImage(MK_ASSET_PATH("textures/normal.dat"), ImageType::Texture2DArray),
+                        .metallicRoughnessAO = GetHandle("white"),
+                        .metallicMin = 0.0f,
+                        .metallicMax = 0.0f,
+                        .roughnessMin = 1.0f,
+                        .roughnessMax = 1.0f,
+                        .aoMin = 0.0f,
+                        .aoMax = 1.0f,
+                    });
+
+                renderer.CreateMaterial<PBRMaterial>(
                     "WeaponMaterial",
                     {
                         .albedo = GetHandle("white"),
+                        .albedoColor = glm::vec4(0.25f, 0.25f, 0.25f, 1.0f),
                         .normal = renderer.LoadImage(MK_ASSET_PATH("textures/normal.dat"), ImageType::Texture2DArray),
                         .metallicRoughnessAO = GetHandle("white"),
+                        .metallicMin = 0.0f,
+                        .metallicMax = 0.0f,
+                        .roughnessMin = 1.0f,
+                        .roughnessMax = 1.0f,
+                        .aoMin = 0.0f,
+                        .aoMax = 1.0f,
                     });
 
                 renderer.LoadMesh(MK_ASSET_PATH("models/sphere.dat"));
                 renderer.LoadMesh(MK_ASSET_PATH("models/plane.dat"));
+                renderer.LoadMesh(MK_ASSET_PATH("models/gun.dat"));
 
                 renderer.CreateMaterial<SkyboxMaterial>(
                     "skybox",
@@ -246,7 +268,7 @@ namespace mk
 
     struct
     {
-        Entity<Transform, PhysicsProxy> playerEntity;
+        Entity<Transform, PhysicsProxy, PlayerMovement> playerEntity;
         Entity<Transform, Renderable> weaponEntity;
         Entity<Transform, CameraSocket> cameraEntity;
         std::vector<Entity<Transform, PhysicsProxy, Renderable>> staticEntities;
@@ -275,15 +297,18 @@ namespace mk
                         .layer = ObjectLayer::Player,
                     },
                     BodyType::Character),
+            },
+            PlayerMovement{
+                .dashSpeed = 3000.0f,
+                .jumpSpeed = 1000.0f,
             });
 
-        glm::vec3 weaponOffset = glm::vec3(0.0f, 0.0f, 0.0f);
         g_entityStore.weaponEntity = CreateEntity(
-            Transform{.position = playerPosition + weaponOffset, .rotation = playerRotation},
+            Transform{.position = playerPosition, .rotation = playerRotation},
             Renderable{
-                .mesh = GetHandle(MK_ASSET_PATH("models/sphere.dat")),
+                .mesh = GetHandle(MK_ASSET_PATH("models/gun.dat")),
                 .material = GetHandle("WeaponMaterial"),
-                .renderMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(50.0f, -20.0f, -100.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f)),
+                .renderMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
             });
 
         glm::vec3 cameraOffset = glm::vec3(0.0f, 0.0f, 200.0f);
@@ -291,14 +316,14 @@ namespace mk
             Transform{.position = cameraOffset, .rotation = glm::identity<glm::quat>()},
             CameraSocket{});
 
+        auto spawnBox = [&](const glm::vec3 &position, const glm::vec3 &boxSize)
         {
-            glm::vec3 boxSize = glm::vec3(250.0f, 10.0f, 250.0f);
             g_entityStore.staticEntities.push_back(CreateEntity(
-                Transform{.position = glm::vec3(0.0f, 0.0f, 0.0f), .rotation = glm::identity<glm::quat>()},
+                Transform{.position = position, .rotation = glm::identity<glm::quat>()},
                 PhysicsProxy{
                     .bodyID = physicsWorld.CreateRigidBody(
                         {
-                            .position = glm::vec3(0.0f, 0.0f, 0.0f),
+                            .position = position,
                             .rotation = glm::identity<glm::quat>(),
                             .initialVelocity = glm::vec3(0.0f),
                             .mass = 0.0f,
@@ -311,10 +336,19 @@ namespace mk
                 },
                 Renderable{
                     .mesh = GetHandle(MK_ASSET_PATH("models/plane.dat")),
-                    .material = GetHandle("WeaponMaterial"),
+                    .material = GetHandle("TestMaterial"),
                     .renderMatrix = glm::scale(glm::mat4(1.0f), boxSize * 0.002f),
+                    .uvScale = glm::vec2(64.0f),
                 }));
-        }
+        };
+
+        // Floor
+        spawnBox(glm::vec3(0.0f), glm::vec3(250.0f, 10.0f, 250.0f) * 10.0f);
+        // Walls
+        spawnBox(glm::vec3(0.0f, 50.0f, -250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
+        spawnBox(glm::vec3(0.0f, 50.0f, 250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
+        spawnBox(glm::vec3(-250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
+        spawnBox(glm::vec3(250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
 
         renderer.SetSkybox(GetHandle("skybox"));
         renderer.SetEnvironmentMap(GetHandle("environment"));
@@ -334,7 +368,6 @@ namespace mk
 
         if (g_debugCamera.active)
         {
-
             g_debugCamera.yaw += inputState.lookAxis.x * 1.0f;
             g_debugCamera.pitch = glm::clamp(inputState.lookAxis.y * 1.0f + g_debugCamera.pitch, -glm::half_pi<float>(), glm::half_pi<float>());
             g_debugCamera.rotation = glm::quat(glm::vec3(g_debugCamera.pitch, g_debugCamera.yaw, 0.0f));
@@ -360,27 +393,56 @@ namespace mk
         {
             Transform &playerTransform = g_entityStore.playerEntity.GetComponent<Transform>();
             PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
+            PlayerMovement &playerMovement = g_entityStore.playerEntity.GetComponent<PlayerMovement>();
+            CameraSocket &cameraSocket = g_entityStore.cameraEntity.GetComponent<CameraSocket>();
 
             // Rotate around the Y axis
             float yaw = 0.0f;
+            float pitch = 0.0f;
             if (glm::length(inputState.lookAxis) > 0.0f)
             {
                 yaw = inputState.lookAxis.x;
                 glm::quat newRotation = glm::rotate(playerTransform.rotation, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                newRotation = glm::normalize(newRotation);
                 physicsWorld.SetRotation(playerProxy.bodyID, newRotation);
+
+                pitch = inputState.lookAxis.y * 0.5f;
+                cameraSocket.pitch = glm::clamp(cameraSocket.pitch + pitch, -glm::half_pi<float>() * 0.99f, glm::half_pi<float>() * 0.99f);
             }
 
             CharacterGroundState groundState = physicsWorld.GetCharacterGroundState(playerProxy.bodyID);
-            if (groundState == CharacterGroundState::OnGround)
+            glm::vec3 velocity = glm::vec3(0.0f);
+            velocity.y = playerProxy.currentState.linearVelocity.y;
+
             {
                 // Move forward
-                float speed = 100.0f;
+                float speed = playerMovement.dashTimer.IsRunning() ? playerMovement.dashSpeed : 750.0f;
                 glm::vec3 forward = playerTransform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                 glm::vec3 alongForward = glm::normalize(glm::vec3(forward.x, 0.0f, forward.z));
                 glm::vec3 right = glm::cross(alongForward, glm::vec3(0.0f, 1.0f, 0.0f));
-                glm::vec3 movement = (alongForward * inputState.movementAxis.y + right * inputState.movementAxis.x) * speed;
-                physicsWorld.SetLinearVelocity(playerProxy.bodyID, movement);
+                glm::vec3 movement = (playerMovement.dashTimer.IsRunning() ? playerMovement.dashDirection : (alongForward * inputState.movementAxis.y + right * inputState.movementAxis.x)) * speed;
+                float movementFactor = playerMovement.dashTimer.IsRunning() ? 50.0f : 20.0f;
+                movement = glm::mix(playerProxy.currentState.linearVelocity, movement, glm::clamp(movementFactor * dt, 0.0f, 1.0f));
+                velocity.x = movement.x;
+                velocity.z = movement.z;
             }
+
+            if (inputState.Pressed(InputActionType::Jump))
+            {
+                playerMovement.wantsToJump = true;
+            }
+
+            playerMovement.dashTimer.Tick(dt);
+            if (inputState.Pressed(InputActionType::Dash))
+            {
+                if (playerMovement.dashTimer.HasElapsed())
+                {
+                    playerMovement.dashDirection = playerTransform.rotation * (glm::length(inputState.movementAxis) > 0.0f ? glm::normalize(glm::vec3(inputState.movementAxis.x, 0.0f, -inputState.movementAxis.y)) : (glm::vec3(0.0f, 0.0f, -1.0f)));
+                    playerMovement.dashTimer.Reset(0.2f);
+                }
+            }
+
+            physicsWorld.SetLinearVelocity(playerProxy.bodyID, velocity);
         }
 
         // Physics interpolation system
@@ -397,13 +459,37 @@ namespace mk
 
         // Attack to player system
         {
-            ForEach<Transform>(
-                [&](Transform &transform)
-                {
-                    transform.position = g_entityStore.playerEntity.GetComponent<Transform>().position;
-                    transform.rotation = g_entityStore.playerEntity.GetComponent<Transform>().rotation;
-                },
-                g_entityStore.weaponEntity, g_entityStore.cameraEntity);
+            Transform &playerTransform = g_entityStore.playerEntity.GetComponent<Transform>();
+            Transform &cameraTransform = g_entityStore.cameraEntity.GetComponent<Transform>();
+            CameraSocket &cameraSocket = g_entityStore.cameraEntity.GetComponent<CameraSocket>();
+            Transform &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
+
+            cameraTransform.position = playerTransform.position + glm::vec3(0.0f, 60.0f, -10.0f);
+            cameraTransform.rotation = glm::rotate(playerTransform.rotation, cameraSocket.pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+
+            PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
+            glm::vec3 velocity = playerProxy.currentState.linearVelocity;
+
+            glm::mat4 weaponSwayTransform = glm::mat4(1.0f);
+            if (glm::length(velocity) > glm::epsilon<float>())
+            {
+                glm::vec3 forward = playerTransform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 right = glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f));
+                glm::vec2 groundDirection = glm::normalize(glm::vec2(velocity.x, velocity.z));
+                glm::vec2 lookDirection = glm::normalize(glm::vec2(forward.x, forward.z));
+                glm::vec2 sideDirection = glm::normalize(glm::vec2(right.x, right.z));
+
+                // Get angle between velcoty and look direction
+                float walkFactor = glm::length(velocity) / 750.0f;
+                float forwardFactor = walkFactor * glm::dot(lookDirection, groundDirection);
+                float upFactor = 1.0f - glm::abs(cameraSocket.pitch / glm::radians(90.0f));
+                weaponSwayTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 3.0f * upFactor * forwardFactor));
+
+                float rightFactor = walkFactor * glm::dot(groundDirection, sideDirection);
+                weaponSwayTransform *= glm::rotate(glm::mat4(1.0f), rightFactor * glm::radians(-3.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            }
+
+            weaponTransform.SetMatrix(cameraTransform.GetMatrix() * glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -40.0f, -50.0f)) * weaponSwayTransform);
         }
     }
 
@@ -412,6 +498,21 @@ namespace mk
         if (g_debugCamera.active)
         {
             return;
+        }
+
+        {
+            PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
+            PlayerMovement &playerMovement = g_entityStore.playerEntity.GetComponent<PlayerMovement>();
+            if (playerMovement.wantsToJump)
+            {
+                physicsWorld.SetLinearVelocity(
+                    playerProxy.bodyID,
+                    glm::vec3(
+                        playerProxy.currentState.linearVelocity.x,
+                        playerMovement.jumpSpeed,
+                        playerProxy.currentState.linearVelocity.z));
+                playerMovement.wantsToJump = false;
+            }
         }
 
         physicsWorld.StepSimulation(dt, numSteps);
@@ -437,7 +538,7 @@ namespace mk
                 renderer.SetCamera({
                     .position = transform.position,
                     .rotation = transform.rotation,
-                    .fov = 60.0f,
+                    .fov = 70.0f,
                 });
             },
             g_entityStore.cameraEntity);
@@ -449,23 +550,12 @@ namespace mk
                     .mesh = renderable.mesh,
                     .material = renderable.material,
                     .transform = transform.GetMatrix() * renderable.renderMatrix,
+                    .texCoord = renderable.uvOffset,
+                    .texSize = renderable.uvScale,
                     .color = renderable.color,
                 });
             },
             g_entityStore.weaponEntity,
-            g_entityStore.staticEntities);
-
-        auto &physicsWorld = Application::GetPhysicsWorld();
-        ForEach<Transform, PhysicsProxy>(
-            [&](const Transform &transform, const PhysicsProxy &proxy)
-            {
-                const auto &collision = physicsWorld.GetCollisionData(proxy.bodyID);
-                if (collision.has_value())
-                {
-                    PhysicsRenderingHelper::RenderCollision(renderer, transform.position, transform.rotation, collision.value());
-                }
-            },
-            g_entityStore.playerEntity,
             g_entityStore.staticEntities);
 
         if (g_debugCamera.active)
@@ -475,6 +565,19 @@ namespace mk
                 .rotation = g_debugCamera.rotation,
                 .fov = g_debugCamera.fov,
             });
+
+            auto &physicsWorld = Application::GetPhysicsWorld();
+            ForEach<Transform, PhysicsProxy>(
+                [&](const Transform &transform, const PhysicsProxy &proxy)
+                {
+                    const auto &collision = physicsWorld.GetCollisionData(proxy.bodyID);
+                    if (collision.has_value())
+                    {
+                        PhysicsRenderingHelper::RenderCollision(renderer, transform.position, transform.rotation, collision.value());
+                    }
+                },
+                g_entityStore.playerEntity,
+                g_entityStore.staticEntities);
         }
 
         renderer.SetDeltaTime(Application::GetDeltaTime());

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Timer.h"
 #include "Physics/Types.h"
 
 #include "Vultron/SceneRenderer.h"
@@ -43,6 +44,7 @@ namespace mk
 
     struct CameraSocket
     {
+        float pitch = 0.0f;
     };
 
     struct Renderable
@@ -51,6 +53,8 @@ namespace mk
         RenderHandle material = c_invalidHandle;
         glm::mat4 renderMatrix = glm::mat4(1.0f);
         glm::vec4 color = glm::vec4(1.0f);
+        glm::vec2 uvOffset = glm::vec2(0.0f);
+        glm::vec2 uvScale = glm::vec2(1.0f);
     };
 
     struct PhysicsProxy
@@ -58,5 +62,14 @@ namespace mk
         BodyID bodyID = c_invalidBodyID;
         RigidBodyState currentState;
         RigidBodyState previousState;
+    };
+
+    struct PlayerMovement
+    {
+        glm::vec3 dashDirection = glm::vec3(0.0f);
+        DynamicTimer dashTimer = DynamicTimer(false);
+        float dashSpeed = 0.0f;
+        float jumpSpeed = 0.0f;
+        bool wantsToJump = false;
     };
 }

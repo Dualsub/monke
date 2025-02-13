@@ -23,7 +23,7 @@ namespace mk
 
         Window::WindowCreateInfo windowCreateInfo = {
             .title = "Monke",
-            .mode = Window::WindowMode::Windowed,
+            .mode = Window::WindowMode::Fullscreen,
         };
 
         if (m_cmdArgs.HasFlag("-windowed"))
