@@ -2,7 +2,8 @@
 
 ## Theme: A love story
 
-Male robot assembiling girlfirend. Finds one part in each level.
+- Male robot assembiling girlfirend. Finds one part in each level.
+- Amor shooter
 
 ## Theme: Exceptions
 ## Theme: Geography
