@@ -585,6 +585,7 @@ namespace mk
         }
 
         // Physics interpolation system
+        if (!g_debugCamera.active)
         {
             float alpha = glm::clamp(Application::GetTimeSincePhysics() / c_fixedUpdateInterval, 0.0f, 1.0f);
             ForEach<Transform, PhysicsProxy>(
