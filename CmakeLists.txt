@@ -31,6 +31,7 @@ add_executable(monke WIN32
 
     src/Game/StateMachines/GameStateMachine.cpp
 
+    src/Game/Helpers/ParticleHelper.cpp
     src/Game/Helpers/PhysicsRenderingHelper.cpp
 )
 
