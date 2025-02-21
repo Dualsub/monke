@@ -142,6 +142,7 @@ namespace mk
             deltaTime = glm::min(deltaTime, m_minUpdateRate);
             lastTime = currentTime;
             m_deltaTime = deltaTime;
+            m_timeSinceStart += deltaTime;
 
             m_window.PollEvents();
             if (m_window.IsMinimized())

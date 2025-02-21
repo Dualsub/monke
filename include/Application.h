@@ -74,6 +74,7 @@ namespace mk
         float m_timeSincePhysics = 0.0f;
         float m_timeScale = 1.0f;
         float m_deltaTime = 0.0f;
+        float m_timeSinceStart = 0.0f;
 
         bool Initialize();
         void Shutdown();
@@ -97,6 +98,7 @@ namespace mk
         static float GetTimeSincePhysics() { return s_instance->m_timeSincePhysics; }
         static float GetTimeScale() { return s_instance->m_timeScale; }
         static float GetDeltaTime() { return s_instance->m_deltaTime; }
+        static float GetTimeSinceStart() { return s_instance->m_timeSinceStart; }
 
         template <typename T>
         static void DispatchEvent(const T &event)
