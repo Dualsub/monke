@@ -4,6 +4,7 @@
 #include "Application.h"
 #include "UI/UIHelper.h"
 #include "Game/Components.h"
+#include "Game/Helpers/ParticleHelper.h"
 #include "Game/Helpers/PhysicsRenderingHelper.h"
 
 #include <glm/glm.hpp>
@@ -30,6 +31,9 @@ namespace mk
             return std::get<Component>(components);
         }
     };
+
+    template <typename... Components>
+    using EntityList = std::vector<Entity<Components...>>;
 
     template <typename... Components>
     Entity<Components...> CreateEntity(Components &&...components)
@@ -179,6 +183,10 @@ namespace mk
             std::launch::async,
             []()
             {
+                auto &audioSystem = Application::GetAudioSystem();
+                audioSystem.LoadBank(MK_ASSET_PATH("/audio/monke/Build/Desktop/Master.bank"), BankType::Master);
+                audioSystem.LoadBank(MK_ASSET_PATH("/audio/monke/Build/Desktop/Master.strings.bank"), BankType::Strings);
+
                 auto &renderer = const_cast<SceneRenderer &>(Application::GetRenderer());
 
                 // Load assets
@@ -233,9 +241,68 @@ namespace mk
                         .aoMax = 1.0f,
                     });
 
+                renderer.CreateMaterial<PBRMaterial>(
+                    "FloorMaterial",
+                    {
+                        .albedo = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_baseColor.dat"), ImageType::Texture2DArray, true),
+                        .normal = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_normal.dat"), ImageType::Texture2DArray, true),
+                        .metallicRoughnessAO = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_occlusionRoughnessMetallic.dat"), ImageType::Texture2DArray, true),
+                        .emissive = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_emissive.dat"), ImageType::Texture2DArray, true),
+                        .emissiveColor = glm::vec4(glm::vec3(0.0f), 0.0f),
+                        .metallicMin = 0.0f,
+                        .metallicMax = 1.0f,
+                        .roughnessMin = 0.15f,
+                        .roughnessMax = 1.0f,
+                        .aoMin = 0.75f,
+                        .aoMax = 1.0f,
+                    });
+
+                renderer.CreateMaterial<PBRMaterial>(
+                    "FloorCorruptedMaterial",
+                    {
+                        .albedo = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_baseColor.dat"), ImageType::Texture2DArray, true),
+                        .albedoColor = glm::vec4(glm::vec3(5.0f, 1.0f, 1.0f), 1.0f),
+                        .normal = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_normal.dat"), ImageType::Texture2DArray, true),
+                        .metallicRoughnessAO = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_occlusionRoughnessMetallic.dat"), ImageType::Texture2DArray, true),
+                        .emissive = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_emissive.dat"), ImageType::Texture2DArray, true),
+                        .emissiveColor = glm::vec4(glm::vec3(5.0f), 1.0f),
+                        .metallicMin = 0.0f,
+                        .metallicMax = 1.0f,
+                        .roughnessMin = 0.0f,
+                        .roughnessMax = 1.0f,
+                        .aoMin = 0.0f,
+                        .aoMax = 1.0f,
+                    });
+
+                renderer.CreateMaterial<PBRMaterial>(
+                    "DroneMaterial",
+                    {
+                        .albedo = renderer.LoadImage(MK_ASSET_PATH("models/drone/textures/drone_albedo.dat"), ImageType::Texture2DArray, true),
+                        .normal = renderer.LoadImage(MK_ASSET_PATH("models/drone/textures/drone_normal.dat"), ImageType::Texture2DArray, true),
+                        .metallicRoughnessAO = renderer.LoadImage(MK_ASSET_PATH("models/drone/textures/drone_arm.dat"), ImageType::Texture2DArray, true),
+                        .emissive = renderer.LoadImage(MK_ASSET_PATH("models/drone/textures/drone_emissive.dat"), ImageType::Texture2DArray, true),
+                        .emissiveColor = glm::vec4(glm::vec3(20.0f), 1.0f),
+                        .metallicMin = 0.0f,
+                        .metallicMax = 1.0f,
+                        .roughnessMin = 0.0f,
+                        .roughnessMax = 1.0f,
+                        .aoMin = 0.0f,
+                        .aoMax = 1.0f,
+                    });
+
                 renderer.LoadMesh(MK_ASSET_PATH("models/sphere.dat"));
                 renderer.LoadMesh(MK_ASSET_PATH("models/plane.dat"));
                 renderer.LoadMesh(MK_ASSET_PATH("models/gun.dat"));
+                renderer.LoadMesh(MK_ASSET_PATH("models/floor/floor.dat"));
+                renderer.LoadMesh(MK_ASSET_PATH("models/drone/drone.dat"));
+
+                renderer.CreateMaterial<PBRMaterial>(
+                    "ParticleAtlasMaterial",
+                    {
+                        .albedo = renderer.LoadImage(MK_ASSET_PATH("textures/particle_atlas_BC.dat"), ImageType::Texture2DArray),
+                        .normal = renderer.LoadImage(MK_ASSET_PATH("textures/particle_atlas_N.dat"), ImageType::Texture2DArray),
+                        .metallicRoughnessAO = renderer.LoadImage(MK_ASSET_PATH("textures/particle_atlas_ARM.dat"), ImageType::Texture2DArray),
+                    });
 
                 renderer.CreateMaterial<SkyboxMaterial>(
                     "skybox",
@@ -312,7 +379,10 @@ namespace mk
 
     void GameStateImpl::OnRender(Vultron::SceneRenderer &renderer, GameStates::MainMenuState &state)
     {
-        UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, "Main Menu", glm::vec2(0.0f, 0.0f), 1.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+        float time = Application::GetTimeSinceStart();
+        float blink = glm::mix(glm::sin(time * 3.0f) * 0.5f + 0.5f, 1.0f, 0.25f);
+        UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, "Perfection.", glm::vec2(-0.65f, -0.125f), 5.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), TextAlignment::Left);
+        UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, "Press any key to start.", glm::vec2(-0.65f, 0.0f), 1.0f, glm::vec4(glm::vec3(1.0f) * blink, 1.0f), TextAlignment::Left);
     }
 
     void GameStateImpl::OnExit(GameStates::MainMenuState &state)
@@ -377,16 +447,54 @@ namespace mk
 
     struct
     {
-        Entity<Transform, PhysicsProxy, PlayerMovement, PlayerAnimations> playerEntity;
-        Entity<Transform, Renderable> weaponEntity;
+        Entity<Transform, PhysicsProxy, PlayerMovement, PlayerAnimations, Health> playerEntity;
+        Entity<Transform, Renderable, WeaponFireAction, ProjectileBulletEmitter> weaponEntity;
         Entity<Transform, CameraSocket> cameraEntity;
-        std::vector<Entity<Transform, PhysicsProxy, Renderable>> staticEntities;
-        std::vector<Entity<Transform, PhysicsProxy, Renderable, Lifetime>> projectiles;
+        EntityList<Transform, PhysicsProxy, Renderable> staticEntities;
+        EntityList<Transform, PhysicsProxy, Renderable, Lifetime> projectiles;
+        EntityList<Transform, PhysicsProxy, Renderable, EnemyType, Health> enemies;
+
+        std::unordered_map<BodyID, float> damageEvents;
     } g_entityStore;
+
+    constexpr int32_t c_tilesPerRow = 20;
+    constexpr float c_tileSize = 400.0f;
+    constexpr float c_tileScale = 0.5f;
+
+    void CreateEnemy(EnemyType type, glm::vec3 position)
+    {
+        auto &renderer = const_cast<SceneRenderer &>(Application::GetRenderer());
+        auto &physicsWorld = Application::GetPhysicsWorld();
+
+        g_entityStore.enemies.push_back(
+            CreateEntity(
+                Transform{.position = position, .rotation = glm::identity<glm::quat>()},
+                PhysicsProxy{
+                    .bodyID = physicsWorld.CreateRigidBody(
+                        {
+                            .position = position,
+                            .rotation = glm::identity<glm::quat>(),
+                            .initialVelocity = glm::vec3(0.0f),
+                            .mass = 1.0f,
+                            .friction = 0.0f,
+                            .continuousCollision = false,
+                            .shape = CapsuleShape(35.0f, 49.0f),
+                            .layer = ObjectLayer::Enemy,
+                        },
+                        BodyType::Character),
+                },
+                Renderable{
+                    .mesh = GetHandle(MK_ASSET_PATH("models/drone/drone.dat")),
+                    .material = GetHandle("DroneMaterial"),
+                    .renderMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(100.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+                    .color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
+                },
+                EnemyType(type),
+                Health{}));
+    }
 
     void GameStateImpl::OnEnter(GameStates::PlayingState &state)
     {
-
         auto &renderer = const_cast<SceneRenderer &>(Application::GetRenderer());
         auto &physicsWorld = Application::GetPhysicsWorld();
 
@@ -417,10 +525,10 @@ namespace mk
                     .duration = 12.0f / 60.0f,
                     .loop = false,
                     .keyframes = {
-                        {.position = glm::vec3(0.0f, 0.0f, -5.0f),
+                        {.position = glm::vec3(0.0f, 0.0f, -5.0f) * 0.25f,
                          .rotation = glm::quat(glm::vec3(0.0f, glm::radians(0.0f), 0.0f)), // Initial slight rotation
                          .time = 0.0f},
-                        {.position = glm::vec3(0.0f, -1.0f, 15.0f),
+                        {.position = glm::vec3(0.0f, -1.0f, 15.0f) * 0.25f,
                          .rotation = glm::quat(glm::vec3(0.0f, glm::radians(-0.0f), 0.0f)), // Small recoil rotation forward
                          .time = 2.0f / 60.0f},
                         {.position = glm::vec3(0.0f, 0.0f, 0.0f),
@@ -428,7 +536,8 @@ namespace mk
                          .time = 12.0f / 60.0f},
                     },
                 },
-            });
+            },
+            Health{});
 
         g_entityStore.weaponEntity = CreateEntity(
             Transform{.position = playerPosition, .rotation = playerRotation},
@@ -436,6 +545,15 @@ namespace mk
                 .mesh = GetHandle(MK_ASSET_PATH("models/gun.dat")),
                 .material = GetHandle("WeaponMaterial"),
                 .renderMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+            },
+            WeaponFireAction{
+                .automatic = true,
+                .fireRate = 600.0f,
+            },
+            ProjectileBulletEmitter{
+                .speed = 5000.0f,
+                .damage = 10.0f,
+                .lifetime = 1.0f,
             });
 
         glm::vec3 cameraOffset = glm::vec3(0.0f, 0.0f, 200.0f);
@@ -471,21 +589,38 @@ namespace mk
         };
 
         // Floor
-        spawnBox(glm::vec3(0.0f), glm::vec3(250.0f, 10.0f, 250.0f) * 10.0f);
-        // Walls
-        spawnBox(glm::vec3(0.0f, 50.0f, -250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
-        spawnBox(glm::vec3(0.0f, 50.0f, 250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
-        spawnBox(glm::vec3(-250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
-        spawnBox(glm::vec3(250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
+        // spawnBox(glm::vec3(0.0f), glm::vec3(250.0f, 10.0f, 250.0f) * 10.0f);
+        // // Walls
+        // spawnBox(glm::vec3(0.0f, 50.0f, -250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
+        // spawnBox(glm::vec3(0.0f, 50.0f, 250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
+        // spawnBox(glm::vec3(-250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
+        // spawnBox(glm::vec3(250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
 
-        // Spawn some boxes
-        for (int i = 0; i < 10; i++)
-        {
-            glm::vec3 randomPosition = glm::vec3((rand() % 200) - 100, 50.0f, (rand() % 200) - 100) * 10.0f;
-            spawnBox(randomPosition, glm::vec3(10.0f, 10.0f, 10.0f) * 10.0f, false);
-        }
+        // // Spawn some boxes
+        // for (int i = 0; i < 10; i++)
+        // {
+        //     glm::vec3 randomPosition = glm::vec3((rand() % 200) - 100, 50.0f, (rand() % 200) - 100) * 10.0f;
+        //     spawnBox(randomPosition, glm::vec3(10.0f, 10.0f, 10.0f) * 10.0f, false);
+        // }
 
-        renderer.SetSkybox(GetHandle("skybox"));
+        // Create floor collider
+        physicsWorld.CreateRigidBody(
+            {
+                .position = glm::vec3(0.0f, 0.0f, 0.0f),
+                .rotation = glm::identity<glm::quat>(),
+                .initialVelocity = glm::vec3(0.0f),
+                .mass = 0.0f,
+                .friction = 0.0f,
+                .continuousCollision = false,
+                .shape = BoxShape(glm::vec3((c_tilesPerRow + 1) * c_tileSize * c_tileScale / 2.0f, 10.0f, (c_tilesPerRow + 1) * c_tileSize * c_tileScale / 2.0f)),
+                .layer = ObjectLayer::NonMoving,
+            },
+            BodyType::Rigidbody);
+
+        CreateEnemy(EnemyType::Basic, glm::vec3(0.0f, 50.0f, 0.0f));
+
+        renderer.SetParticleAtlasMaterial(GetHandle("ParticleAtlasMaterial"));
+        // renderer.SetSkybox(GetHandle("skybox"));
         renderer.SetEnvironmentMap(GetHandle("environment"));
     }
 
@@ -534,16 +669,23 @@ namespace mk
             // Rotate around the Y axis
             float yaw = 0.0f;
             float pitch = 0.0f;
+
+            float oldYaw = cameraSocket.yaw;
+            float oldPitch = cameraSocket.pitch;
+
             if (glm::length(inputState.lookAxis) > 0.0f)
             {
                 yaw = inputState.lookAxis.x;
-                glm::quat newRotation = glm::rotate(playerTransform.rotation, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-                newRotation = glm::normalize(newRotation);
+                cameraSocket.yaw += yaw;
+                glm::quat newRotation = glm::rotate(glm::identity<glm::quat>(), cameraSocket.yaw, glm::vec3(0.0f, 1.0f, 0.0f));
                 physicsWorld.SetRotation(playerProxy.bodyID, newRotation);
 
-                pitch = inputState.lookAxis.y * 0.5f;
+                pitch = inputState.lookAxis.y;
                 cameraSocket.pitch = glm::clamp(cameraSocket.pitch + pitch, -glm::half_pi<float>() * 0.99f, glm::half_pi<float>() * 0.99f);
             }
+
+            playerMovement.yawSpeed = (cameraSocket.yaw - oldYaw) / dt;
+            playerMovement.pitchSpeed = (cameraSocket.pitch - oldPitch) / dt;
 
             CharacterGroundState groundState = physicsWorld.GetCharacterGroundState(playerProxy.bodyID);
             glm::vec3 velocity = glm::vec3(0.0f);
@@ -566,18 +708,32 @@ namespace mk
                 }
             }
 
-            if (inputState.Pressed(InputActionType::Jump))
+            // Stamina system
+            constexpr float c_staminaRegenRate = 0.5f;
             {
-                playerMovement.wantsToJump = true;
+                playerMovement.stamina = glm::clamp(playerMovement.stamina + c_staminaRegenRate * dt, 0.0f, 1.0f);
             }
 
+            constexpr float c_jumpStaminaCost = 0.4f;
+            if (inputState.Pressed(InputActionType::Jump))
+            {
+                if (!playerMovement.wantsToJump && playerMovement.stamina >= c_jumpStaminaCost)
+                {
+                    playerMovement.wantsToJump = true;
+                    playerMovement.stamina -= c_jumpStaminaCost;
+                }
+            }
+
+            constexpr float c_dashStaminaCost = 0.3f;
             playerMovement.dashTimer.Tick(dt);
             if (inputState.Pressed(InputActionType::Dash))
             {
-                if (playerMovement.dashTimer.HasElapsed())
+                if (playerMovement.dashTimer.HasElapsed() && playerMovement.stamina >= c_dashStaminaCost)
                 {
                     playerMovement.dashDirection = playerTransform.rotation * (glm::length(inputState.movementAxis) > 0.0f ? glm::normalize(glm::vec3(inputState.movementAxis.x, 0.0f, -inputState.movementAxis.y)) : (glm::vec3(0.0f, 0.0f, -1.0f)));
                     playerMovement.dashTimer.Reset(0.2f);
+                    // audioSystem.PlayEventAtPosition("event:/monke/dash", playerProxy.currentState.position, playerProxy.currentState.linearVelocity);
+                    playerMovement.stamina -= c_dashStaminaCost;
                 }
             }
 
@@ -594,7 +750,7 @@ namespace mk
                     transform.position = glm::mix(proxy.previousState.position, proxy.currentState.position, alpha);
                     transform.rotation = glm::slerp(proxy.previousState.rotation, proxy.currentState.rotation, alpha);
                 },
-                g_entityStore.playerEntity, g_entityStore.staticEntities, g_entityStore.projectiles);
+                g_entityStore.playerEntity, g_entityStore.staticEntities, g_entityStore.projectiles, g_entityStore.enemies);
         }
 
         // Camera attach to player
@@ -605,9 +761,20 @@ namespace mk
             CameraSocket &cameraSocket = g_entityStore.cameraEntity.GetComponent<CameraSocket>();
 
             cameraTransform.position = playerTransform.position + glm::vec3(0.0f, 60.0f, -10.0f);
-            cameraTransform.rotation = glm::rotate(playerTransform.rotation, cameraSocket.pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+            // Set from pitch and yaw
+            cameraTransform.rotation = glm::rotate(glm::identity<glm::quat>(), cameraSocket.yaw, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::rotate(glm::identity<glm::quat>(), cameraSocket.pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+            std::cout << "Camera pitch: " << cameraSocket.pitch << std::endl;
+            std::cout << "Camera yaw: " << cameraSocket.yaw << std::endl;
+            std::cout << "Camera rotation: " << cameraTransform.rotation.x << ", " << cameraTransform.rotation.y << ", " << cameraTransform.rotation.z << ", " << cameraTransform.rotation.w << std::endl;
 
             cameraSocket.fov = glm::mix(cameraSocket.fov, playerMovement.dashTimer.IsRunning() ? 75.0f : 70.0f, glm::clamp(40.0f * dt, 0.0f, 1.0f));
+        }
+
+        // Camera audio
+        {
+            Transform &playerTransform = g_entityStore.playerEntity.GetComponent<Transform>();
+            PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
+            audioSystem.SetListenerState(playerProxy.currentState.position, playerProxy.currentState.rotation, playerProxy.currentState.linearVelocity);
         }
 
         // Weapon animation
@@ -622,12 +789,14 @@ namespace mk
             Transform &cameraTransform = g_entityStore.cameraEntity.GetComponent<Transform>();
             CameraSocket &cameraSocket = g_entityStore.cameraEntity.GetComponent<CameraSocket>();
             Transform &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
+            PlayerMovement &playerMovement = g_entityStore.playerEntity.GetComponent<PlayerMovement>();
             PlayerAnimations &playerAnimations = g_entityStore.playerEntity.GetComponent<PlayerAnimations>();
 
             PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
             glm::vec3 velocity = playerProxy.currentState.linearVelocity;
 
-            glm::mat4 weaponSwayTransform = glm::mat4(1.0f);
+            static Transform oldWeaponSwayTransform;
+            Transform weaponSwayTransform;
             if (glm::length(velocity) > glm::epsilon<float>())
             {
                 glm::vec3 forward = playerTransform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
@@ -640,37 +809,62 @@ namespace mk
                 float walkFactor = glm::length(velocity) / 750.0f;
                 float forwardFactor = walkFactor * glm::dot(lookDirection, groundDirection);
                 float upFactor = 1.0f - glm::abs(cameraSocket.pitch / glm::radians(90.0f));
-                weaponSwayTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 3.0f * upFactor * forwardFactor));
+                weaponSwayTransform.position += glm::vec3(0.0f, 0.0f, 3.0f * upFactor * forwardFactor);
 
                 float rightFactor = walkFactor * glm::dot(groundDirection, sideDirection);
-                weaponSwayTransform *= glm::rotate(glm::mat4(1.0f), rightFactor * glm::radians(-3.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+                weaponSwayTransform.rotation = glm::rotate(weaponSwayTransform.rotation, rightFactor * glm::radians(-3.0f), glm::vec3(0.0f, 0.0f, 1.0f));
             }
 
-            weaponTransform.SetMatrix(cameraTransform.GetMatrix() * glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -40.0f, -50.0f)) * weaponSwayTransform * GetAnimationTransform(playerAnimations.shootAnimation));
+            glm::vec3 angularVelocity = glm::vec3(playerMovement.pitchSpeed, playerMovement.yawSpeed, 0.0f);
+            if (glm::length(angularVelocity) > glm::epsilon<float>())
+            {
+                // make it so that the weapon rotates in the opposite direction of the player's rotation
+                float amount = glm::clamp(glm::length(angularVelocity) * 0.005f, 0.0f, glm::radians(3.0f));
+                weaponSwayTransform.rotation = glm::rotate(weaponSwayTransform.rotation, amount, glm::normalize(angularVelocity));
+            }
+
+            weaponSwayTransform.position = glm::mix(oldWeaponSwayTransform.position, weaponSwayTransform.position, glm::clamp(20.0f * dt, 0.0f, 1.0f));
+            weaponSwayTransform.rotation = glm::slerp(oldWeaponSwayTransform.rotation, weaponSwayTransform.rotation, glm::clamp(20.0f * dt, 0.0f, 1.0f));
+            oldWeaponSwayTransform = weaponSwayTransform;
+
+            weaponTransform.SetMatrix(cameraTransform.GetMatrix() * glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -40.0f, -50.0f)) * weaponSwayTransform.GetMatrix() * GetAnimationTransform(playerAnimations.shootAnimation));
         }
 
         // Player fire
         {
-            if (inputState.Pressed(InputActionType::Attack))
+            WeaponFireAction &fireAction = g_entityStore.weaponEntity.GetComponent<WeaponFireAction>();
             {
+                fireAction.fireTimer.Tick(dt);
+                bool wantsToFire = fireAction.automatic ? inputState.Down(InputActionType::Attack) : inputState.Pressed(InputActionType::Attack);
+                fireAction.fire = wantsToFire && fireAction.fireTimer.HasElapsed();
+                if (fireAction.fire)
+                {
+                    fireAction.fireTimer.Reset(60.0f / fireAction.fireRate);
+                }
+            }
+
+            if (fireAction.fire)
+            {
+                ProjectileBulletEmitter &emitter = g_entityStore.weaponEntity.GetComponent<ProjectileBulletEmitter>();
                 Transform &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
                 Transform &cameraTransform = g_entityStore.cameraEntity.GetComponent<Transform>();
                 PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
                 glm::vec3 forward = weaponTransform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
                 glm::vec3 position = weaponTransform.position + forward * 150.0f;
-                glm::vec3 velocity = forward * 5000.0f;
+                glm::vec3 velocity = forward * emitter.speed;
                 glm::quat rotation = weaponTransform.rotation;
-                float scale = 0.2f;
-                glm::vec4 color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+                float scale = 0.1f;
+                glm::vec4 color = glm::vec4(0.0f, 5.0f, 10.0f, 1.0f);
 
                 auto bodyId = physicsWorld.CreateRigidBody(
                     {
                         .position = position,
                         .rotation = rotation,
                         .initialVelocity = velocity,
-                        .mass = 5.0f,
+                        .mass = 1.0f,
                         .friction = 0.0f,
                         .continuousCollision = true,
+                        .gravityFactor = 0.0f,
                         .shape = SphereShape(scale * 100.0f),
                         .layer = ObjectLayer::PlayerProjectile,
                     },
@@ -691,11 +885,60 @@ namespace mk
                         .material = GetHandle("WhiteMaterial"),
                         .color = color,
                     },
-                    Lifetime{.timer = DynamicTimer(3.0f)}));
+                    Lifetime{.timer = DynamicTimer(emitter.lifetime)}));
 
                 g_entityStore.playerEntity.GetComponent<PlayerAnimations>().shootAnimation.time = 0.0f;
             }
         }
+
+        ForEach<Transform, PhysicsProxy, EnemyType>(
+            [&](Transform &transform, PhysicsProxy &proxy, EnemyType &type)
+            {
+                if (type == EnemyType::Basic)
+                {
+                    glm::vec3 enemyToPlayer = g_entityStore.playerEntity.GetComponent<Transform>().position - transform.position;
+                    if (glm::length(enemyToPlayer) < 200.0f)
+                    {
+                        return;
+                    }
+
+                    enemyToPlayer.y = 0.0f;
+                    physicsWorld.SetLinearVelocity(
+                        proxy.bodyID,
+                        glm::normalize(enemyToPlayer) * 300.0f);
+
+                    glm::quat rotation = glm::quatLookAt(glm::normalize(enemyToPlayer), glm::vec3(0.0f, 1.0f, 0.0f));
+                    physicsWorld.SetRotation(
+                        proxy.bodyID,
+                        rotation);
+                }
+            },
+            g_entityStore.enemies);
+
+        // Damage system
+        ForEach<PhysicsProxy, Health>(
+            [&](PhysicsProxy &proxy, Health &health)
+            {
+                if (g_entityStore.damageEvents.find(proxy.bodyID) != g_entityStore.damageEvents.end())
+                {
+                    health.current -= g_entityStore.damageEvents[proxy.bodyID];
+                    g_entityStore.damageEvents.erase(proxy.bodyID);
+                }
+
+                if (health.current <= 0.0f)
+                {
+                    physicsWorld.RemoveRigidBody(proxy.bodyID);
+                }
+            },
+            g_entityStore.playerEntity,
+            g_entityStore.enemies);
+
+        Filter<PhysicsProxy, Health>(
+            [&](PhysicsProxy &proxy, Health &health) -> bool
+            {
+                return health.current <= 0.0f;
+            },
+            g_entityStore.enemies);
     }
 
     void GameStateImpl::OnFixedUpdate(float dt, uint32_t numSteps, PhysicsWorld &physicsWorld, GameStates::PlayingState &state)
@@ -732,7 +975,8 @@ namespace mk
                 },
                 g_entityStore.playerEntity,
                 g_entityStore.staticEntities,
-                g_entityStore.projectiles);
+                g_entityStore.projectiles,
+                g_entityStore.enemies);
         }
 
         // Projectiles removal system
@@ -742,11 +986,16 @@ namespace mk
                 {
                     const auto &contacts = physicsWorld.GetContacts(proxy.bodyID);
 
-                    // if (!contacts.empty())
-                    // {
-                    //     physicsWorld.RemoveRigidBody(proxy.bodyID);
-                    //     return true;
-                    // }
+                    if (!contacts.empty())
+                    {
+                        for (const auto &contact : contacts)
+                        {
+                            g_entityStore.damageEvents[contact.body] += 10.0f;
+                        }
+
+                        physicsWorld.RemoveRigidBody(proxy.bodyID);
+                        return true;
+                    }
 
                     if (transform.position.y < -1000.0f)
                     {
@@ -768,6 +1017,8 @@ namespace mk
 
     void GameStateImpl::OnRender(Vultron::SceneRenderer &renderer, GameStates::PlayingState &state)
     {
+        std::array<PointLightData, 4> pointsLights = {};
+
         ForEach<Transform, CameraSocket>(
             [&](Transform &transform, CameraSocket &socket)
             {
@@ -793,7 +1044,24 @@ namespace mk
             },
             g_entityStore.weaponEntity,
             g_entityStore.staticEntities,
-            g_entityStore.projectiles);
+            g_entityStore.projectiles,
+            g_entityStore.enemies);
+
+        // Muzzle flash light
+        {
+            auto &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
+            auto &weaponFireAction = g_entityStore.weaponEntity.GetComponent<WeaponFireAction>();
+
+            if (weaponFireAction.fireTimer.IsRunning())
+            {
+                float timeSinceStart = 60.0f / weaponFireAction.fireRate - weaponFireAction.fireTimer.GetTimeRemaining();
+                pointsLights[0] = {
+                    .position = weaponTransform.position + weaponTransform.rotation * glm::vec3(0.0f, 0.0f, -150.0f),
+                    .radius = 1500.0f,
+                    .color = glm::vec4(0.0f, 10.0f, 20.0f, 1.0f) * glm::mix(0.0f, 1.0f, glm::clamp(1.0f - timeSinceStart / 0.05f, 0.0f, 1.0f)),
+                };
+            }
+        }
 
         if (g_debugCamera.active)
         {
@@ -815,9 +1083,114 @@ namespace mk
                 },
                 g_entityStore.playerEntity,
                 g_entityStore.staticEntities,
-                g_entityStore.projectiles);
+                g_entityStore.projectiles,
+                g_entityStore.enemies);
         }
 
+        float corruptedAmount = 0.0f;
+        // for (int32_t x = -c_tilesPerRow / 2; x < c_tilesPerRow / 2; x++)
+        // {
+        //     for (int32_t z = -c_tilesPerRow / 2; z < c_tilesPerRow / 2; z++)
+        //     {
+        //         uint32_t hash = (x * 73856093) ^ (z * 19349663);
+        //         uint32_t hash2 = hash ^ 0x5f3759df;
+        //         uint32_t hash3 = (hash2 >> 16) ^ (hash2 << 16);
+        //         bool isCorrupted = hash3 % 5 == 0;
+        //         if (isCorrupted)
+        //         {
+        //             corruptedAmount += 1.0f;
+        //         }
+        //     }
+        // }
+        // corruptedAmount /= c_tilesPerRow * c_tilesPerRow;
+
+        float timeSinceStart = Application::GetTimeSinceStart();
+        for (int32_t x = -c_tilesPerRow / 2; x < c_tilesPerRow / 2; x++)
+        {
+            for (int32_t z = -c_tilesPerRow / 2; z < c_tilesPerRow / 2; z++)
+            {
+                // Hash the x and z values to get a unique value
+                uint32_t hash = (x * 73856093) ^ (z * 19349663);
+                uint32_t hash2 = hash ^ 0x5f3759df;
+                uint32_t hash3 = (hash2 >> 16) ^ (hash2 << 16);
+                bool isCorrupted = hash3 % 5 == 0;
+
+                float time = glm::mix(corruptedAmount, 1.0f, 2.0f) * timeSinceStart;
+
+                glm::vec3 tilePosition = glm::vec3(x * c_tileSize * c_tileScale, glm::sin(glm::radians(float(hash2 % 360)) + time) * 10.0f * corruptedAmount, z * c_tileSize * c_tileScale);
+
+                renderer.SubmitRenderJob(StaticRenderJob{
+                    .mesh = GetHandle(MK_ASSET_PATH("models/floor/floor.dat")),
+                    .material = !isCorrupted ? GetHandle("FloorMaterial") : GetHandle("FloorCorruptedMaterial"),
+                    .transform = glm::translate(glm::mat4(1.0f), tilePosition) *
+                                 glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                                 glm::rotate(glm::mat4(1.0f), glm::radians((hash % 4) * 90.0f), glm::vec3(0.0f, 0.0f, 1.0f)) *
+                                 glm::scale(glm::mat4(1.0f), glm::vec3(c_tileScale)),
+                    .texCoord = isCorrupted ? glm::vec2(glm::sin(time * 2.0f + glm::radians(float(hash3 % 360))), glm::cos(time * 2.0f + glm::radians(float(hash2 % 360)))) : glm::vec2(0.0f),
+                });
+
+                // Pick random position in tile
+            }
+        }
+
+        // Render stamina bar
+        {
+            float stamina = g_entityStore.playerEntity.GetComponent<PlayerMovement>().stamina;
+
+            glm::vec2 position = glm::vec2(0.0f, 0.85f);
+            glm::vec2 size = glm::vec2(0.25f, 0.0125f);
+
+            renderer.SubmitRenderJob(SpriteRenderJob{
+                .material = GetHandle("WhiteSpriteMaterial"),
+                .position = position, // + glm::vec2(stamina * 0.1f - 0.1f, 0.0f),
+                .size = size * glm::vec2(stamina, 1.0f),
+                .zOrder = 1.0f,
+            });
+
+            renderer.SubmitRenderJob(SpriteRenderJob{
+                .material = GetHandle("WhiteSpriteMaterial"),
+                .position = position, // + glm::vec2(stamina * 0.1f - 0.1f, 0.0f),
+                .size = size,
+                .color = glm::vec4(0.5f, 0.5f, 0.5f, 0.5f),
+            });
+        }
+
+        // Render crosshair
+        {
+            constexpr float c_crosshairSize = 0.005f;
+
+            glm::vec2 position = glm::vec2(0.0f, 0.0f);
+            glm::vec2 size = glm::vec2(1.0f, renderer.GetAspectRatio()) * c_crosshairSize;
+
+            renderer.SubmitRenderJob(SpriteRenderJob{
+                .material = GetHandle("WhiteSpriteMaterial"),
+                .position = position,
+                .size = size,
+                .color = glm::vec4(1.0f),
+                .borderRadius = glm::vec4(c_crosshairSize),
+                .zOrder = 1.0f,
+            });
+        }
+
+        // Debug point lights
+        if (false)
+        {
+            for (int i = 0; i < pointsLights.size(); i++)
+            {
+                auto &pointLight = pointsLights[i];
+                if (pointLight.radius > 0.0f)
+                {
+                    renderer.SubmitRenderJob(StaticRenderJob{
+                        .mesh = GetHandle(MK_ASSET_PATH("models/sphere.dat")),
+                        .material = GetHandle("WhiteMaterial"),
+                        .transform = glm::translate(glm::mat4(1.0f), pointLight.position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f)),
+                        .color = pointLight.color,
+                    });
+                }
+            }
+        }
+
+        renderer.SetPointLights(pointsLights);
         renderer.SetDeltaTime(Application::GetDeltaTime());
     }
 

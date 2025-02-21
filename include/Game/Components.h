@@ -46,6 +46,7 @@ namespace mk
     {
         float fov = 70.0f;
         float pitch = 0.0f;
+        float yaw = 0.0f;
     };
 
     struct Renderable
@@ -72,6 +73,9 @@ namespace mk
         float dashSpeed = 0.0f;
         float jumpSpeed = 0.0f;
         bool wantsToJump = false;
+        float yawSpeed = 0.0f;
+        float pitchSpeed = 0.0f;
+        float stamina = 1.0f;
     };
 
     struct Animation
@@ -98,5 +102,44 @@ namespace mk
     struct Lifetime
     {
         DynamicTimer timer = DynamicTimer(false);
+    };
+
+    enum class EnemyType
+    {
+        Basic,
+
+        Count,
+        None
+    };
+
+    struct Health
+    {
+        float current = 100.0f;
+        float max = 100.0f;
+    };
+
+    // One component that is the weapon trigger action, like full auto or semi auto, then another that is the bullet firing part
+    struct WeaponFireAction
+    {
+        bool automatic = false;
+        float fireRate = 600.0f;
+        DynamicTimer fireTimer = DynamicTimer(false);
+
+        bool fire = false;
+    };
+
+    // Reads the WeaponTrigger component and fires a bullet
+
+    struct ProjectileBulletEmitter
+    {
+        float speed = 0.0f;
+        float damage = 0.0f;
+        float lifetime = 0.0f;
+    };
+
+    struct RaycastBulletEmitter
+    {
+        float distance = 0.0f;
+        RaycastType type = RaycastType::Closest;
     };
 }
