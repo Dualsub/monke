@@ -9,6 +9,8 @@
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
 
+#include <string_view>
+
 using namespace Vultron;
 
 namespace mk
@@ -68,6 +70,7 @@ namespace mk
 
     struct PlayerMovement
     {
+        CharacterGroundState groundState = CharacterGroundState::Unknown;
         glm::vec3 dashDirection = glm::vec3(0.0f);
         DynamicTimer dashTimer = DynamicTimer(false);
         float dashSpeed = 0.0f;
@@ -94,10 +97,17 @@ namespace mk
         std::vector<KeyFrame> keyframes = {};
     };
 
-    struct PlayerAnimations
+    enum class PlayerAnimationType
     {
-        Animation shootAnimation;
+        ShootAnimation,
+        EquipAnimation,
+        JumpAnimation,
+
+        Count,
+        None
     };
+
+    using PlayerAnimations = EnumArray<PlayerAnimationType, Animation>;
 
     struct Lifetime
     {
@@ -106,10 +116,23 @@ namespace mk
 
     enum class EnemyType
     {
-        Basic,
+        Drone,
+        Fast,
+        Heavy,
 
         Count,
         None
+    };
+
+    struct EnemyAI
+    {
+        std::optional<glm::vec3> target = std::nullopt;
+        DynamicTimer shootTimer = DynamicTimer(false);
+    };
+
+    struct SoundEmitter
+    {
+        std::optional<EventHandle> event = std::nullopt;
     };
 
     struct Health
@@ -123,6 +146,8 @@ namespace mk
     {
         bool automatic = false;
         float fireRate = 600.0f;
+        std::string_view fireSoundEvent = "";
+
         DynamicTimer fireTimer = DynamicTimer(false);
 
         bool fire = false;
@@ -130,16 +155,63 @@ namespace mk
 
     // Reads the WeaponTrigger component and fires a bullet
 
+    enum class ProjectileType
+    {
+        PlasmaBullet,
+        Rocket,
+
+        EnemyBullet,
+
+        Count,
+        None
+    };
+
     struct ProjectileBulletEmitter
     {
+        ProjectileType type = ProjectileType::PlasmaBullet;
         float speed = 0.0f;
         float damage = 0.0f;
         float lifetime = 0.0f;
+        float gravity = 0.0f;
     };
 
     struct RaycastBulletEmitter
     {
         float distance = 0.0f;
         RaycastType type = RaycastType::Closest;
+    };
+
+    struct Inventory
+    {
+        size_t currentWeaponIndex = 0;
+    };
+
+    enum class CameraShakeType
+    {
+        Weapon,
+        Damage,
+
+        Count,
+        None
+    };
+
+    struct CameraShake
+    {
+        float time = FLT_MAX;
+        float duration = 1.0f;
+
+        float frequency = 0.0f;
+
+        float pitch = 0.0f;
+        float yaw = 0.0f;
+        glm::vec3 offset = glm::vec3(0.0f);
+    };
+
+    using CameraShakes = EnumArray<CameraShakeType, CameraShake>;
+
+    struct Tile
+    {
+        float corruption = 0.0f;
+        float reset = 0.0f;
     };
 }

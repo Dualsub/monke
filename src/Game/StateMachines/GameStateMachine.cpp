@@ -5,11 +5,17 @@
 #include "UI/UIHelper.h"
 #include "Game/Components.h"
 #include "Game/Helpers/ParticleHelper.h"
+#include "Game/Helpers/PerlinNoiseHelper.h"
 #include "Game/Helpers/PhysicsRenderingHelper.h"
 
 #include <glm/glm.hpp>
 
 #include <ranges>
+
+// Undefine windows.h macro for CreateEvent
+#ifdef CreateEvent
+#undef CreateEvent
+#endif
 
 namespace mk
 {
@@ -94,11 +100,11 @@ namespace mk
         }
     }
 
-    glm::mat4 GetAnimationTransform(Animation &animation)
+    Transform GetAnimationTransform(Animation &animation)
     {
         // Return identity matrix if there are not enough keyframes to interpolate
         if (animation.keyframes.size() < 2)
-            return glm::mat4(1.0f);
+            return Transform{};
 
         int32_t keyFrame1Index = -1;
         int32_t keyFrame2Index = -1;
@@ -154,7 +160,7 @@ namespace mk
         glm::quat rotation = glm::slerp(keyFrame1.rotation, keyFrame2.rotation, interpolationFactor);
 
         // Return the transformation matrix combining translation and rotation
-        return glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation);
+        return Transform{position, rotation};
     }
 
     struct DebugCamera
@@ -194,6 +200,12 @@ namespace mk
                     "WhiteSpriteMaterial",
                     {
                         .texture = GetHandle("white"),
+                    });
+
+                renderer.CreateMaterial<SpriteMaterial>(
+                    "BloodHudMaterial",
+                    {
+                        .texture = renderer.LoadImage(MK_ASSET_PATH("ui/blood_hud.dat")),
                     });
 
                 auto normal = renderer.LoadImage(MK_ASSET_PATH("textures/normal.dat"), ImageType::Texture2DArray);
@@ -261,7 +273,6 @@ namespace mk
                     "FloorCorruptedMaterial",
                     {
                         .albedo = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_baseColor.dat"), ImageType::Texture2DArray, true),
-                        .albedoColor = glm::vec4(glm::vec3(5.0f, 1.0f, 1.0f), 1.0f),
                         .normal = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_normal.dat"), ImageType::Texture2DArray, true),
                         .metallicRoughnessAO = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_occlusionRoughnessMetallic.dat"), ImageType::Texture2DArray, true),
                         .emissive = renderer.LoadImage(MK_ASSET_PATH("models/floor/textures/floor_corrupted_emissive.dat"), ImageType::Texture2DArray, true),
@@ -293,8 +304,10 @@ namespace mk
                 renderer.LoadMesh(MK_ASSET_PATH("models/sphere.dat"));
                 renderer.LoadMesh(MK_ASSET_PATH("models/plane.dat"));
                 renderer.LoadMesh(MK_ASSET_PATH("models/gun.dat"));
+                renderer.LoadMesh(MK_ASSET_PATH("models/launcher/launcher.dat"));
                 renderer.LoadMesh(MK_ASSET_PATH("models/floor/floor.dat"));
-                renderer.LoadMesh(MK_ASSET_PATH("models/drone/drone.dat"));
+                renderer.LoadMesh(MK_ASSET_PATH("models/drone/drone.dat"), true);
+                renderer.LoadMesh(MK_ASSET_PATH("models/tree/tree.dat"), true);
 
                 renderer.CreateMaterial<PBRMaterial>(
                     "ParticleAtlasMaterial",
@@ -362,7 +375,7 @@ namespace mk
 
     void GameStateImpl::OnUpdate(float dt, AudioSystem &audioSystem, PhysicsWorld &physicsWorld, const InputState &inputState, GameStates::MainMenuState &state)
     {
-        if (inputState.Pressed(InputActionType::Attack))
+        if (inputState.Pressed(InputActionType::Jump))
         {
             state.shouldEnterGame = true;
         }
@@ -381,7 +394,7 @@ namespace mk
     {
         float time = Application::GetTimeSinceStart();
         float blink = glm::mix(glm::sin(time * 3.0f) * 0.5f + 0.5f, 1.0f, 0.25f);
-        UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, "Perfection.", glm::vec2(-0.65f, -0.125f), 5.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), TextAlignment::Left);
+        UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, "The Last Garden.", glm::vec2(-0.65f, -0.125f), 4.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), TextAlignment::Left);
         UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, "Press any key to start.", glm::vec2(-0.65f, 0.0f), 1.0f, glm::vec4(glm::vec3(1.0f) * blink, 1.0f), TextAlignment::Left);
     }
 
@@ -445,58 +458,171 @@ namespace mk
 
 #pragma region PlayingState
 
-    struct
-    {
-        Entity<Transform, PhysicsProxy, PlayerMovement, PlayerAnimations, Health> playerEntity;
-        Entity<Transform, Renderable, WeaponFireAction, ProjectileBulletEmitter> weaponEntity;
-        Entity<Transform, CameraSocket> cameraEntity;
-        EntityList<Transform, PhysicsProxy, Renderable> staticEntities;
-        EntityList<Transform, PhysicsProxy, Renderable, Lifetime> projectiles;
-        EntityList<Transform, PhysicsProxy, Renderable, EnemyType, Health> enemies;
-
-        std::unordered_map<BodyID, float> damageEvents;
-    } g_entityStore;
-
     constexpr int32_t c_tilesPerRow = 20;
     constexpr float c_tileSize = 400.0f;
     constexpr float c_tileScale = 0.5f;
+
+    constexpr glm::vec3 c_corruptionBeginColor = glm::vec3(0.0f, 0.0f, 0.0f);
+    constexpr glm::vec3 c_corruptionEndColor = glm::vec3(1.0f, 0.0f, 0.0f);
+
+    using WeaponEntity = Entity<Transform, Renderable, WeaponFireAction, ProjectileBulletEmitter>;
+
+    struct
+    {
+        Entity<Transform, PhysicsProxy, PlayerMovement, PlayerAnimations, Health, Inventory> playerEntity;
+        std::array<WeaponEntity, 2> weaponEntities;
+
+        Entity<Transform, CameraSocket, CameraShakes> cameraEntity;
+        EntityList<Transform, PhysicsProxy, Renderable, Lifetime> staticEntities;
+        EntityList<ProjectileType, Transform, PhysicsProxy, Renderable, Lifetime> projectiles;
+        EntityList<EnemyType, Transform, PhysicsProxy, Renderable, EnemyAI, SoundEmitter, Health> enemies;
+
+        std::unordered_map<BodyID, float> damageEvents;
+
+        std::array<Tile, c_tilesPerRow * c_tilesPerRow> tiles;
+        BodyID floorBodyID = 0;
+        std::vector<int32_t> nonCorruptedTiles;
+
+        DynamicTimer waveTimer = DynamicTimer(false);
+        uint32_t wave = 0;
+
+        EventHandle ambienceEvent = 0;
+        DynamicTimer enemySoundTimer = DynamicTimer(false);
+
+        std::vector<ParticleEmitJob> particleJobs;
+    } g_entityStore;
+
+    WeaponEntity &GetCurrentPlayerWeapon()
+    {
+        return g_entityStore.weaponEntities[g_entityStore.playerEntity.GetComponent<Inventory>().currentWeaponIndex];
+    }
+
+    int32_t GetTileIndex(const glm::vec3 &position)
+    {
+        constexpr float gridHalfSize = c_tileSize * c_tileScale * c_tilesPerRow * 0.5f;
+        // Return -1 if outside of the grid
+        if (position.x < -gridHalfSize || position.x > gridHalfSize || position.z < -gridHalfSize || position.z > gridHalfSize)
+            return -1;
+
+        // Calculate the grid position
+        int32_t x = static_cast<int32_t>((position.x + gridHalfSize) / (c_tileSize * c_tileScale));
+        int32_t z = static_cast<int32_t>((position.z + gridHalfSize) / (c_tileSize * c_tileScale));
+        return z * c_tilesPerRow + x;
+    }
+
+    glm::vec3 GetTilePosition(int32_t index)
+    {
+        constexpr float gridHalfSize = c_tileSize * c_tileScale * c_tilesPerRow * 0.5f;
+        constexpr float tileHalfSize = c_tileSize * c_tileScale * 0.5f;
+        int32_t x = index % c_tilesPerRow;
+        int32_t z = index / c_tilesPerRow;
+        return glm::vec3(x * c_tileSize * c_tileScale + tileHalfSize - gridHalfSize, 0.0f, z * c_tileSize * c_tileScale + tileHalfSize - gridHalfSize);
+    }
+
+    std::vector<int32_t> GetTilesInRadius(const glm::vec3 &center, float radius)
+    {
+        int32_t centerIndex = GetTileIndex(center);
+
+        if (centerIndex < 0)
+            return {};
+
+        int32_t centerX = centerIndex % c_tilesPerRow;
+        int32_t centerZ = centerIndex / c_tilesPerRow;
+
+        float tileWorldSize = c_tileSize * c_tileScale;
+
+        float tileRadius = radius / tileWorldSize;
+
+        int32_t tileRange = static_cast<int32_t>(std::ceil(tileRadius));
+
+        std::vector<int32_t> result;
+        result.reserve((2 * tileRange + 1) * (2 * tileRange + 1)); // optional optimization
+
+        for (int32_t dz = -tileRange; dz <= tileRange; ++dz)
+        {
+            for (int32_t dx = -tileRange; dx <= tileRange; ++dx)
+            {
+                int32_t tileX = centerX + dx;
+                int32_t tileZ = centerZ + dz;
+
+                if (tileX < 0 || tileX >= c_tilesPerRow || tileZ < 0 || tileZ >= c_tilesPerRow)
+                    continue;
+
+                int32_t candidateIndex = tileZ * c_tilesPerRow + tileX;
+
+                glm::vec3 tilePos = GetTilePosition(candidateIndex);
+
+                float distXZ = glm::distance(
+                    glm::vec2(center.x, center.z),
+                    glm::vec2(tilePos.x, tilePos.z));
+
+                if (distXZ <= radius)
+                {
+                    result.push_back(candidateIndex);
+                }
+            }
+        }
+
+        return result;
+    }
 
     void CreateEnemy(EnemyType type, glm::vec3 position)
     {
         auto &renderer = const_cast<SceneRenderer &>(Application::GetRenderer());
         auto &physicsWorld = Application::GetPhysicsWorld();
 
+        auto meshHandle = GetHandle(MK_ASSET_PATH("models/drone/drone.dat"));
+        glm::mat4 modelTransform = glm::scale(glm::mat4(1.0f), glm::vec3(100.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+        auto bodyID = physicsWorld.CreateRigidBody(
+            {
+                .position = position,
+                .rotation = glm::identity<glm::quat>(),
+                .initialVelocity = glm::vec3(0.0f),
+                .mass = 1.0f,
+                .friction = 1.0f,
+                .continuousCollision = false,
+                .gravityFactor = 0.0f,
+                .shape = MeshShape(renderer.GetMeshVertices(meshHandle), renderer.GetMeshIndices(meshHandle), modelTransform),
+                .layer = ObjectLayer::Enemy,
+            },
+            BodyType::Rigidbody);
+        RigidBodyState state = physicsWorld.GetRigidBodyState(bodyID);
         g_entityStore.enemies.push_back(
             CreateEntity(
+                EnemyType(type),
                 Transform{.position = position, .rotation = glm::identity<glm::quat>()},
                 PhysicsProxy{
-                    .bodyID = physicsWorld.CreateRigidBody(
-                        {
-                            .position = position,
-                            .rotation = glm::identity<glm::quat>(),
-                            .initialVelocity = glm::vec3(0.0f),
-                            .mass = 1.0f,
-                            .friction = 0.0f,
-                            .continuousCollision = false,
-                            .shape = CapsuleShape(35.0f, 49.0f),
-                            .layer = ObjectLayer::Enemy,
-                        },
-                        BodyType::Character),
+                    .bodyID = bodyID,
+                    .currentState = state,
+                    .previousState = state,
                 },
                 Renderable{
-                    .mesh = GetHandle(MK_ASSET_PATH("models/drone/drone.dat")),
+                    .mesh = meshHandle,
                     .material = GetHandle("DroneMaterial"),
-                    .renderMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(100.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+                    .renderMatrix = modelTransform,
                     .color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
                 },
-                EnemyType(type),
-                Health{}));
+                EnemyAI{},
+                SoundEmitter{},
+                Health{.current = 50.0f, .max = 50.0f}));
     }
 
     void GameStateImpl::OnEnter(GameStates::PlayingState &state)
     {
+        for (int32_t i = 0; i < g_entityStore.tiles.size(); ++i)
+        {
+            glm::vec3 position = GetTilePosition(i);
+            int32_t j = GetTileIndex(position);
+
+            assert(i == j);
+        }
+
         auto &renderer = const_cast<SceneRenderer &>(Application::GetRenderer());
         auto &physicsWorld = Application::GetPhysicsWorld();
+        auto &audioSystem = Application::GetAudioSystem();
+
+        g_entityStore = {};
 
         glm::vec3 playerPosition = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::quat playerRotation = glm::identity<glm::quat>();
@@ -521,14 +647,14 @@ namespace mk
                 .jumpSpeed = 750.0f,
             },
             PlayerAnimations{
-                .shootAnimation = Animation{
+                Animation{
                     .duration = 12.0f / 60.0f,
                     .loop = false,
                     .keyframes = {
-                        {.position = glm::vec3(0.0f, 0.0f, -5.0f) * 0.25f,
+                        {.position = glm::vec3(0.0f, 0.0f, -5.0f),
                          .rotation = glm::quat(glm::vec3(0.0f, glm::radians(0.0f), 0.0f)), // Initial slight rotation
                          .time = 0.0f},
-                        {.position = glm::vec3(0.0f, -1.0f, 15.0f) * 0.25f,
+                        {.position = glm::vec3(0.0f, -1.0f, 15.0f),
                          .rotation = glm::quat(glm::vec3(0.0f, glm::radians(-0.0f), 0.0f)), // Small recoil rotation forward
                          .time = 2.0f / 60.0f},
                         {.position = glm::vec3(0.0f, 0.0f, 0.0f),
@@ -536,75 +662,87 @@ namespace mk
                          .time = 12.0f / 60.0f},
                     },
                 },
+                Animation{
+                    .duration = 0.25f,
+                    .loop = false,
+                    .keyframes = {
+                        {.position = glm::vec3(0.0f, -20.0f, 0.0f), .rotation = glm::quat(glm::vec3(glm::radians(-45.0f), 0.0f, 0.0f)), .time = 0.0f},
+                        {.position = glm::vec3(0.0f, 0.0f, 0.0f), .rotation = glm::quat(glm::vec3(0.0f, glm::radians(0.0f), 0.0f)), .time = 0.25f},
+                    },
+                },
+                Animation{
+                    .duration = 0.3f,
+                    .loop = false,
+                    .keyframes = {
+                        {.position = glm::vec3(0.0f, -10.0f, 0.0f), .rotation = glm::quat(glm::vec3(glm::radians(0.0f), 0.0f, 0.0f)), .time = 0.0f},
+                        {.position = glm::vec3(0.0f, 0.0f, 0.0f), .rotation = glm::quat(glm::vec3(0.0f, glm::radians(0.0f), 0.0f)), .time = 0.3f},
+                    },
+                },
             },
-            Health{});
+            Health{}, Inventory{.currentWeaponIndex = 0});
 
-        g_entityStore.weaponEntity = CreateEntity(
-            Transform{.position = playerPosition, .rotation = playerRotation},
-            Renderable{
-                .mesh = GetHandle(MK_ASSET_PATH("models/gun.dat")),
-                .material = GetHandle("WeaponMaterial"),
-                .renderMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
-            },
-            WeaponFireAction{
-                .automatic = true,
-                .fireRate = 600.0f,
-            },
-            ProjectileBulletEmitter{
-                .speed = 5000.0f,
-                .damage = 10.0f,
-                .lifetime = 1.0f,
-            });
+        g_entityStore.weaponEntities = {
+            CreateEntity(
+                Transform{.position = playerPosition, .rotation = playerRotation},
+                Renderable{
+                    .mesh = GetHandle(MK_ASSET_PATH("models/gun.dat")),
+                    .material = GetHandle("WeaponMaterial"),
+                    .renderMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+                },
+                WeaponFireAction{
+                    .automatic = true,
+                    .fireRate = 700.0f,
+                    .fireSoundEvent = "event:/weapons/plasma",
+                },
+                ProjectileBulletEmitter{
+                    .type = ProjectileType::PlasmaBullet,
+                    .speed = 8000.0f,
+                    .damage = 10.0f,
+                    .lifetime = 1.0f,
+                }),
+            CreateEntity(
+                Transform{.position = playerPosition, .rotation = playerRotation},
+                Renderable{
+                    .mesh = GetHandle(MK_ASSET_PATH("models/launcher/launcher.dat")),
+                    .material = GetHandle("WeaponMaterial"),
+                    .renderMatrix = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+                },
+                WeaponFireAction{
+                    .automatic = false,
+                    .fireRate = 20.0f,
+                    .fireSoundEvent = "event:/weapons/launcher",
+                },
+                ProjectileBulletEmitter{
+                    .type = ProjectileType::Rocket,
+                    .speed = 3000.0f,
+                    .damage = 100.0f,
+                    .lifetime = 10.0f,
+                }),
+        };
 
         glm::vec3 cameraOffset = glm::vec3(0.0f, 0.0f, 200.0f);
         g_entityStore.cameraEntity = CreateEntity(
             Transform{.position = cameraOffset, .rotation = glm::identity<glm::quat>()},
-            CameraSocket{});
-
-        auto spawnBox = [&](const glm::vec3 &position, const glm::vec3 &boxSize, bool isStatic = true)
-        {
-            g_entityStore.staticEntities.push_back(CreateEntity(
-                Transform{.position = position, .rotation = glm::identity<glm::quat>()},
-                PhysicsProxy{
-                    .bodyID = physicsWorld.CreateRigidBody(
-                        {
-                            .position = position,
-                            .rotation = glm::identity<glm::quat>(),
-                            .initialVelocity = glm::vec3(0.0f),
-                            .mass = isStatic ? 0.0f : 1.0f,
-                            .friction = 0.0f,
-                            .continuousCollision = false,
-                            .shape = BoxShape(boxSize),
-                            .layer = isStatic ? ObjectLayer::NonMoving : ObjectLayer::Moving,
-                        },
-                        BodyType::Rigidbody),
+            CameraSocket{},
+            CameraShakes{
+                // Fire
+                CameraShake{
+                    .duration = 0.15f,
+                    .frequency = 5.0f,
+                    .pitch = glm::radians(1.0f),
+                    .yaw = glm::radians(1.0f),
                 },
-                Renderable{
-                    .mesh = GetHandle(MK_ASSET_PATH("models/plane.dat")),
-                    .material = isStatic ? GetHandle("TestMaterial") : GetHandle("WhiteMaterial"),
-                    .renderMatrix = glm::scale(glm::mat4(1.0f), boxSize * 0.002f),
-                    .color = !isStatic ? glm::vec4(0.5f, 0.5f, 1.0f, 1.0f) : glm::vec4(1.0f),
-                    .uvScale = glm::vec2(64.0f),
-                }));
-        };
-
-        // Floor
-        // spawnBox(glm::vec3(0.0f), glm::vec3(250.0f, 10.0f, 250.0f) * 10.0f);
-        // // Walls
-        // spawnBox(glm::vec3(0.0f, 50.0f, -250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
-        // spawnBox(glm::vec3(0.0f, 50.0f, 250.0f) * 10.0f, glm::vec3(250.0f, 50.0f, 5.0f) * 10.0f);
-        // spawnBox(glm::vec3(-250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
-        // spawnBox(glm::vec3(250.0f, 50.0f, 0.0f) * 10.0f, glm::vec3(5.0f, 50.0f, 250.0f) * 10.0f);
-
-        // // Spawn some boxes
-        // for (int i = 0; i < 10; i++)
-        // {
-        //     glm::vec3 randomPosition = glm::vec3((rand() % 200) - 100, 50.0f, (rand() % 200) - 100) * 10.0f;
-        //     spawnBox(randomPosition, glm::vec3(10.0f, 10.0f, 10.0f) * 10.0f, false);
-        // }
+                // Damage
+                CameraShake{
+                    .duration = 0.2f,
+                    .frequency = 4.0f,
+                    .pitch = glm::radians(3.0f),
+                    .yaw = glm::radians(3.0f),
+                },
+            });
 
         // Create floor collider
-        physicsWorld.CreateRigidBody(
+        g_entityStore.floorBodyID = physicsWorld.CreateRigidBody(
             {
                 .position = glm::vec3(0.0f, 0.0f, 0.0f),
                 .rotation = glm::identity<glm::quat>(),
@@ -612,16 +750,21 @@ namespace mk
                 .mass = 0.0f,
                 .friction = 0.0f,
                 .continuousCollision = false,
-                .shape = BoxShape(glm::vec3((c_tilesPerRow + 1) * c_tileSize * c_tileScale / 2.0f, 10.0f, (c_tilesPerRow + 1) * c_tileSize * c_tileScale / 2.0f)),
+                .shape = BoxShape(glm::vec3(c_tilesPerRow * c_tileSize * c_tileScale / 2.0f, 10.0f, c_tilesPerRow * c_tileSize * c_tileScale / 2.0f)),
                 .layer = ObjectLayer::NonMoving,
             },
             BodyType::Rigidbody);
 
-        CreateEnemy(EnemyType::Basic, glm::vec3(0.0f, 50.0f, 0.0f));
+        physicsWorld.RegisterContactListener(g_entityStore.floorBodyID);
+
+        g_entityStore.tiles.fill({});
 
         renderer.SetParticleAtlasMaterial(GetHandle("ParticleAtlasMaterial"));
         // renderer.SetSkybox(GetHandle("skybox"));
         renderer.SetEnvironmentMap(GetHandle("environment"));
+
+        g_entityStore.ambienceEvent = audioSystem.CreateEvent("event:/ambience");
+        audioSystem.PlayEvent(g_entityStore.ambienceEvent);
     }
 
     void GameStateImpl::OnUpdate(float dt, AudioSystem &audioSystem, PhysicsWorld &physicsWorld, const InputState &inputState, GameStates::PlayingState &state)
@@ -665,6 +808,7 @@ namespace mk
             PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
             PlayerMovement &playerMovement = g_entityStore.playerEntity.GetComponent<PlayerMovement>();
             CameraSocket &cameraSocket = g_entityStore.cameraEntity.GetComponent<CameraSocket>();
+            PlayerAnimations &playerAnimations = g_entityStore.playerEntity.GetComponent<PlayerAnimations>();
 
             // Rotate around the Y axis
             float yaw = 0.0f;
@@ -721,6 +865,7 @@ namespace mk
                 {
                     playerMovement.wantsToJump = true;
                     playerMovement.stamina -= c_jumpStaminaCost;
+                    playerAnimations[PlayerAnimationType::JumpAnimation].time = 0.0f;
                 }
             }
 
@@ -763,11 +908,20 @@ namespace mk
             cameraTransform.position = playerTransform.position + glm::vec3(0.0f, 60.0f, -10.0f);
             // Set from pitch and yaw
             cameraTransform.rotation = glm::rotate(glm::identity<glm::quat>(), cameraSocket.yaw, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::rotate(glm::identity<glm::quat>(), cameraSocket.pitch, glm::vec3(1.0f, 0.0f, 0.0f));
-            std::cout << "Camera pitch: " << cameraSocket.pitch << std::endl;
-            std::cout << "Camera yaw: " << cameraSocket.yaw << std::endl;
-            std::cout << "Camera rotation: " << cameraTransform.rotation.x << ", " << cameraTransform.rotation.y << ", " << cameraTransform.rotation.z << ", " << cameraTransform.rotation.w << std::endl;
-
             cameraSocket.fov = glm::mix(cameraSocket.fov, playerMovement.dashTimer.IsRunning() ? 75.0f : 70.0f, glm::clamp(40.0f * dt, 0.0f, 1.0f));
+        }
+
+        // Camera shake
+        {
+            ForEach<CameraShakes>(
+                [&](CameraShakes &cameraShakes)
+                {
+                    for (auto &shake : cameraShakes)
+                    {
+                        shake.time = glm::clamp(shake.time + dt, 0.0f, shake.duration);
+                    }
+                },
+                g_entityStore.cameraEntity);
         }
 
         // Camera audio
@@ -777,10 +931,36 @@ namespace mk
             audioSystem.SetListenerState(playerProxy.currentState.position, playerProxy.currentState.rotation, playerProxy.currentState.linearVelocity);
         }
 
+        // Weapon switch
+        {
+            PlayerAnimations &playerAnimations = g_entityStore.playerEntity.GetComponent<PlayerAnimations>();
+            bool next = inputState.Pressed(InputActionType::NextOption);
+            bool previous = inputState.Pressed(InputActionType::PreviousOption);
+            if (next || previous)
+            {
+                int32_t currentIndex = g_entityStore.playerEntity.GetComponent<Inventory>().currentWeaponIndex;
+                int32_t newIndex = currentIndex + (next ? 1 : -1);
+                if (newIndex < 0)
+                {
+                    newIndex = g_entityStore.weaponEntities.size() - 1;
+                }
+                else if (newIndex >= static_cast<int32_t>(g_entityStore.weaponEntities.size()))
+                {
+                    newIndex = 0;
+                }
+
+                g_entityStore.playerEntity.GetComponent<Inventory>().currentWeaponIndex = newIndex;
+                playerAnimations[PlayerAnimationType::EquipAnimation].time = 0.0f;
+            }
+        }
+
         // Weapon animation
         {
             PlayerAnimations &playerAnimations = g_entityStore.playerEntity.GetComponent<PlayerAnimations>();
-            UpdateAnimation(playerAnimations.shootAnimation, dt);
+            for (auto &animation : playerAnimations)
+            {
+                UpdateAnimation(animation, dt);
+            }
         }
 
         // Weapon attach to camera
@@ -788,14 +968,13 @@ namespace mk
             Transform &playerTransform = g_entityStore.playerEntity.GetComponent<Transform>();
             Transform &cameraTransform = g_entityStore.cameraEntity.GetComponent<Transform>();
             CameraSocket &cameraSocket = g_entityStore.cameraEntity.GetComponent<CameraSocket>();
-            Transform &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
+            Transform &weaponTransform = GetCurrentPlayerWeapon().GetComponent<Transform>();
             PlayerMovement &playerMovement = g_entityStore.playerEntity.GetComponent<PlayerMovement>();
             PlayerAnimations &playerAnimations = g_entityStore.playerEntity.GetComponent<PlayerAnimations>();
 
             PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
             glm::vec3 velocity = playerProxy.currentState.linearVelocity;
 
-            static Transform oldWeaponSwayTransform;
             Transform weaponSwayTransform;
             if (glm::length(velocity) > glm::epsilon<float>())
             {
@@ -823,30 +1002,56 @@ namespace mk
                 weaponSwayTransform.rotation = glm::rotate(weaponSwayTransform.rotation, amount, glm::normalize(angularVelocity));
             }
 
+            static Transform oldWeaponSwayTransform = weaponSwayTransform;
             weaponSwayTransform.position = glm::mix(oldWeaponSwayTransform.position, weaponSwayTransform.position, glm::clamp(20.0f * dt, 0.0f, 1.0f));
             weaponSwayTransform.rotation = glm::slerp(oldWeaponSwayTransform.rotation, weaponSwayTransform.rotation, glm::clamp(20.0f * dt, 0.0f, 1.0f));
             oldWeaponSwayTransform = weaponSwayTransform;
 
-            weaponTransform.SetMatrix(cameraTransform.GetMatrix() * glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -40.0f, -50.0f)) * weaponSwayTransform.GetMatrix() * GetAnimationTransform(playerAnimations.shootAnimation));
+            Transform animationTransform;
+            for (auto &animation : playerAnimations)
+            {
+                Transform clipTransform = GetAnimationTransform(animation);
+                animationTransform.position += clipTransform.position;
+                animationTransform.rotation *= clipTransform.rotation;
+            }
+
+            static Transform oldAnimationTransform = animationTransform;
+            animationTransform.position = glm::mix(oldAnimationTransform.position, animationTransform.position, glm::clamp(25.0f * dt, 0.0f, 1.0f));
+            animationTransform.rotation = glm::slerp(oldAnimationTransform.rotation, animationTransform.rotation, glm::clamp(25.0f * dt, 0.0f, 1.0f));
+            oldAnimationTransform = animationTransform;
+
+            weaponTransform.SetMatrix(cameraTransform.GetMatrix() * glm::translate(glm::mat4(1.0f), glm::vec3(20.0f, -40.0f, -50.0f)) * weaponSwayTransform.GetMatrix() * animationTransform.GetMatrix());
         }
+
+        // Tick fire for all weapons
+        for (auto &weapon : g_entityStore.weaponEntities)
+        {
+            WeaponFireAction &fireAction = weapon.GetComponent<WeaponFireAction>();
+            fireAction.fireTimer.Tick(dt);
+        }
+
+        static float timeScale = 1.0f;
+        timeScale = glm::mix(timeScale, inputState.Down(InputActionType::Aim) ? 0.2f : 1.0f, glm::clamp(10.0f * dt, 0.0f, 1.0f));
+        Application::SetTimeScale(timeScale);
 
         // Player fire
         {
-            WeaponFireAction &fireAction = g_entityStore.weaponEntity.GetComponent<WeaponFireAction>();
+            WeaponFireAction &fireAction = GetCurrentPlayerWeapon().GetComponent<WeaponFireAction>();
             {
-                fireAction.fireTimer.Tick(dt);
                 bool wantsToFire = fireAction.automatic ? inputState.Down(InputActionType::Attack) : inputState.Pressed(InputActionType::Attack);
                 fireAction.fire = wantsToFire && fireAction.fireTimer.HasElapsed();
                 if (fireAction.fire)
                 {
                     fireAction.fireTimer.Reset(60.0f / fireAction.fireRate);
+                    audioSystem.PlayEvent(std::string(fireAction.fireSoundEvent));
+                    g_entityStore.cameraEntity.GetComponent<CameraShakes>()[CameraShakeType::Weapon].time = 0.0f;
                 }
             }
 
             if (fireAction.fire)
             {
-                ProjectileBulletEmitter &emitter = g_entityStore.weaponEntity.GetComponent<ProjectileBulletEmitter>();
-                Transform &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
+                ProjectileBulletEmitter &emitter = GetCurrentPlayerWeapon().GetComponent<ProjectileBulletEmitter>();
+                Transform &weaponTransform = GetCurrentPlayerWeapon().GetComponent<Transform>();
                 Transform &cameraTransform = g_entityStore.cameraEntity.GetComponent<Transform>();
                 PhysicsProxy &playerProxy = g_entityStore.playerEntity.GetComponent<PhysicsProxy>();
                 glm::vec3 forward = weaponTransform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
@@ -864,7 +1069,7 @@ namespace mk
                         .mass = 1.0f,
                         .friction = 0.0f,
                         .continuousCollision = true,
-                        .gravityFactor = 0.0f,
+                        .gravityFactor = emitter.gravity,
                         .shape = SphereShape(scale * 100.0f),
                         .layer = ObjectLayer::PlayerProjectile,
                     },
@@ -874,6 +1079,7 @@ namespace mk
                 auto previousState = currentState;
 
                 g_entityStore.projectiles.push_back(CreateEntity(
+                    ProjectileType(emitter.type),
                     Transform{.position = position, .rotation = rotation, .scale = glm::vec3(scale)},
                     PhysicsProxy{
                         .bodyID = bodyId,
@@ -887,33 +1093,47 @@ namespace mk
                     },
                     Lifetime{.timer = DynamicTimer(emitter.lifetime)}));
 
-                g_entityStore.playerEntity.GetComponent<PlayerAnimations>().shootAnimation.time = 0.0f;
+                g_entityStore.playerEntity.GetComponent<PlayerAnimations>()[PlayerAnimationType::ShootAnimation].time = 0.0f;
             }
         }
 
-        ForEach<Transform, PhysicsProxy, EnemyType>(
-            [&](Transform &transform, PhysicsProxy &proxy, EnemyType &type)
+        // Non corrupted tiles
+        {
+            g_entityStore.nonCorruptedTiles.clear();
+            for (int i = 0; i < c_tilesPerRow * c_tilesPerRow; i++)
             {
-                if (type == EnemyType::Basic)
+                if (g_entityStore.tiles[i].corruption < 1.0f)
                 {
-                    glm::vec3 enemyToPlayer = g_entityStore.playerEntity.GetComponent<Transform>().position - transform.position;
-                    if (glm::length(enemyToPlayer) < 200.0f)
-                    {
-                        return;
-                    }
-
-                    enemyToPlayer.y = 0.0f;
-                    physicsWorld.SetLinearVelocity(
-                        proxy.bodyID,
-                        glm::normalize(enemyToPlayer) * 300.0f);
-
-                    glm::quat rotation = glm::quatLookAt(glm::normalize(enemyToPlayer), glm::vec3(0.0f, 1.0f, 0.0f));
-                    physicsWorld.SetRotation(
-                        proxy.bodyID,
-                        rotation);
+                    g_entityStore.nonCorruptedTiles.push_back(i);
                 }
-            },
-            g_entityStore.enemies);
+            }
+
+            std::shuffle(g_entityStore.nonCorruptedTiles.begin(), g_entityStore.nonCorruptedTiles.end(), std::default_random_engine());
+        }
+
+        // Reset tile amount
+        {
+            for (auto &tile : g_entityStore.tiles)
+            {
+                tile.reset = glm::max(tile.reset - (1.0f / 0.5f) * dt, 0.0f);
+            }
+        }
+
+        // Wave spawn system
+        {
+            if (g_entityStore.waveTimer.Tick(dt))
+            {
+                g_entityStore.wave++;
+                g_entityStore.waveTimer.Reset(glm::mix(20.0f, 40.0f, glm::clamp(static_cast<float>(g_entityStore.wave) / 10.0f, 0.0f, 1.0f)));
+                int32_t numEnemies = 8 + g_entityStore.wave * 2;
+                for (int i = 0; i < numEnemies; i++)
+                {
+                    float angle = glm::radians(static_cast<float>(i) / static_cast<float>(numEnemies) * 360.0f);
+                    glm::vec3 position = glm::vec3(glm::cos(angle), 0.0f, glm::sin(angle)) * 8000.0f + glm::vec3(0.0f, 150.0f, 0.0f);
+                    CreateEnemy(EnemyType::Drone, position);
+                }
+            }
+        }
 
         // Damage system
         ForEach<PhysicsProxy, Health>(
@@ -921,24 +1141,247 @@ namespace mk
             {
                 if (g_entityStore.damageEvents.find(proxy.bodyID) != g_entityStore.damageEvents.end())
                 {
-                    health.current -= g_entityStore.damageEvents[proxy.bodyID];
-                    g_entityStore.damageEvents.erase(proxy.bodyID);
-                }
-
-                if (health.current <= 0.0f)
-                {
-                    physicsWorld.RemoveRigidBody(proxy.bodyID);
+                    health.current = glm::clamp(health.current - g_entityStore.damageEvents[proxy.bodyID], 0.0f, health.max);
                 }
             },
             g_entityStore.playerEntity,
             g_entityStore.enemies);
 
-        Filter<PhysicsProxy, Health>(
-            [&](PhysicsProxy &proxy, Health &health) -> bool
+        Filter<Transform, PhysicsProxy, Renderable, Health>(
+            [&](Transform &transform, PhysicsProxy &proxy, Renderable &renderable, Health &health) -> bool
             {
-                return health.current <= 0.0f;
+                if (health.current <= 0.0f)
+                {
+                    physicsWorld.SetGravityFactor(proxy.bodyID, 1.0f);
+
+                    // Add static entity with same everything
+                    g_entityStore.staticEntities.push_back(
+                        CreateEntity(
+                            Transform(transform),
+                            PhysicsProxy(proxy),
+                            Renderable(renderable),
+                            Lifetime{.timer = DynamicTimer(5.0f)}));
+
+                    SceneRenderer &renderer = const_cast<SceneRenderer &>(Application::GetRenderer());
+                    ParticleHelper::SpawnExplosionEffect(g_entityStore.particleJobs, transform.position);
+
+                    return true;
+                }
+
+                return false;
             },
             g_entityStore.enemies);
+
+        // Player damage reaction
+        {
+            Health &playerHealth = g_entityStore.playerEntity.GetComponent<Health>();
+            if (g_entityStore.damageEvents.find(g_entityStore.playerEntity.GetComponent<PhysicsProxy>().bodyID) != g_entityStore.damageEvents.end())
+            {
+                g_entityStore.cameraEntity.GetComponent<CameraShakes>()[CameraShakeType::Damage].time = 0.0f;
+            }
+        }
+
+        g_entityStore.damageEvents.clear();
+
+        // Enemy AI system
+        ForEach<Transform, PhysicsProxy, Health, EnemyType, EnemyAI>(
+            [&](Transform &transform, PhysicsProxy &proxy, Health &health, EnemyType &type, EnemyAI &ai)
+            {
+                switch (type)
+                {
+                case EnemyType::Drone:
+                {
+                    glm::vec3 direction = glm::vec3(0.0f);
+                    // If outdide of the grid, move towards the center
+                    if (GetTileIndex(transform.position) == -1)
+                    {
+                        direction = glm::normalize(-transform.position);
+                    }
+                    else
+                    {
+                        // Have we achieved our goal?
+                        if (ai.target.has_value())
+                        {
+                            uint32_t tileIndex = GetTileIndex(ai.target.value());
+                            if (tileIndex != -1 && g_entityStore.tiles[tileIndex].corruption >= 1.0f)
+                            {
+                                ai.target.reset();
+                            }
+                        }
+
+                        // If we don't have a target, set it
+                        if (!ai.target.has_value())
+                        {
+                            if (!g_entityStore.nonCorruptedTiles.empty())
+                            {
+                                ai.target = GetTilePosition(g_entityStore.nonCorruptedTiles.back());
+                                g_entityStore.nonCorruptedTiles.pop_back();
+                            }
+                            else
+                            {
+                                // Random tile
+                                ai.target = GetTilePosition(rand() % g_entityStore.tiles.size());
+                            }
+                        }
+
+                        glm::vec3 toTarget = ai.target.value() - transform.position;
+                        // We just stay at the current position if the target is too close
+                        if (glm::length(toTarget) > 50.0f)
+                        {
+                            // Move towards the target
+                            direction = glm::normalize(toTarget);
+                        }
+                    }
+
+                    if (glm::length(direction) > glm::epsilon<float>())
+                    {
+                        physicsWorld.SetLinearVelocity(
+                            proxy.bodyID,
+                            direction * 300.0f);
+                    }
+
+                    glm::vec3 enemyToPlayer = g_entityStore.playerEntity.GetComponent<Transform>().position - transform.position;
+                    if (glm::length(enemyToPlayer) > 100.0f)
+                    {
+                        glm::vec3 enemyToPlayerAlongXZ = glm::normalize(glm::vec3(enemyToPlayer.x, 0.0f, enemyToPlayer.z));
+                        glm::quat rotation = glm::quatLookAt(glm::normalize(enemyToPlayer), glm::vec3(0.0f, 1.0f, 0.0f));
+                        physicsWorld.SetRotation(
+                            proxy.bodyID,
+                            rotation);
+                    }
+                }
+                break;
+
+                case EnemyType::Fast:
+                {
+                    constexpr float c_attackRange = 150.0f;
+
+                    // Just go toeards the player fast
+                    glm::vec3 enemyToPlayer = g_entityStore.playerEntity.GetComponent<Transform>().position - transform.position;
+                    if (glm::length(enemyToPlayer) > c_attackRange)
+                    {
+                        glm::vec3 direction = glm::normalize(enemyToPlayer);
+                        glm::quat rotation = glm::normalize(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
+                        physicsWorld.SetRotation(
+                            proxy.bodyID,
+                            rotation);
+                        physicsWorld.SetLinearVelocity(
+                            proxy.bodyID,
+                            direction * 800.0f);
+                    }
+                    else
+                    {
+                        health.current = 0.0f;
+                        g_entityStore.damageEvents[g_entityStore.playerEntity.GetComponent<PhysicsProxy>().bodyID] += 50.0f / (1.0f + glm::length(enemyToPlayer) / c_attackRange);
+                    }
+                }
+                }
+            },
+            g_entityStore.enemies);
+
+        // Enemy attack system
+        {
+            constexpr float c_attackRange = 3000.0f;
+            constexpr float c_attackDamage = 10.0f;
+            ForEach<Transform, EnemyType, EnemyAI>(
+                [&](Transform &transform, EnemyType &type, EnemyAI &ai)
+                {
+                    if (type == EnemyType::Drone)
+                    {
+                        // If the shoot timer is up, shoot, then reset to random value
+                        if (ai.shootTimer.Tick(dt))
+                        {
+                            glm::vec3 enemyToPlayer = g_entityStore.playerEntity.GetComponent<Transform>().position - transform.position;
+                            if (glm::length(enemyToPlayer) < c_attackRange)
+                            {
+                                glm::vec3 forward = transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f);
+                                glm::vec3 position = transform.position + forward * 150.0f;
+                                glm::vec3 velocity = forward * 2000.0f;
+                                glm::quat rotation = transform.rotation;
+                                float scale = 0.1f;
+                                glm::vec4 color = glm::vec4(10.0f, 0.0f, 0.0f, 1.0f);
+
+                                auto bodyId = physicsWorld.CreateRigidBody(
+                                    {
+                                        .position = position,
+                                        .rotation = rotation,
+                                        .initialVelocity = velocity,
+                                        .mass = 1.0f,
+                                        .friction = 0.0f,
+                                        .continuousCollision = true,
+                                        .gravityFactor = 0.0f,
+                                        .shape = SphereShape(scale * 100.0f),
+                                        .layer = ObjectLayer::EnemyProjectile,
+                                    },
+                                    BodyType::Rigidbody);
+                                physicsWorld.RegisterContactListener(bodyId);
+                                auto currentState = physicsWorld.GetRigidBodyState(bodyId);
+                                auto previousState = currentState;
+
+                                g_entityStore.projectiles.push_back(CreateEntity(
+                                    ProjectileType::EnemyBullet,
+                                    Transform{.position = position, .rotation = rotation, .scale = glm::vec3(scale)},
+                                    PhysicsProxy{
+                                        .bodyID = bodyId,
+                                        .currentState = currentState,
+                                        .previousState = previousState,
+                                    },
+                                    Renderable{
+                                        .mesh = GetHandle(MK_ASSET_PATH("models/sphere.dat")),
+                                        .material = GetHandle("WhiteMaterial"),
+                                        .color = color,
+                                    },
+                                    Lifetime{.timer = DynamicTimer(5.0f)}));
+                            }
+
+                            ai.shootTimer.Reset(2.0f + static_cast<float>(rand() % 6));
+                        }
+                    }
+                },
+                g_entityStore.enemies);
+        }
+
+        // Enemy corruption system
+        constexpr float c_corruptionRate = 0.4f;
+        ForEach<Transform, EnemyType>(
+            [&](Transform &transform, EnemyType &type)
+            {
+                int32_t tileIndex = GetTileIndex(transform.position);
+                glm::vec3 tilePosition = GetTilePosition(tileIndex);
+                if (tileIndex != -1 && glm::length(tilePosition - transform.position) < 200.0f)
+                {
+                    g_entityStore.tiles[tileIndex].corruption = glm::clamp(g_entityStore.tiles[tileIndex].corruption + c_corruptionRate * dt, 0.0f, 1.0f);
+                }
+            },
+            g_entityStore.enemies);
+
+        // Enemy sound system
+        {
+            // When the timer if up, pick a random enemy, set their sound emitter to play a sound
+            if (g_entityStore.enemySoundTimer.Tick(dt))
+            {
+                if (!g_entityStore.enemies.empty())
+                {
+                    int32_t randomIndex = rand() % g_entityStore.enemies.size();
+                    auto &enemy = g_entityStore.enemies[randomIndex];
+                    auto &soundEmitter = enemy.GetComponent<SoundEmitter>();
+                    soundEmitter.event = audioSystem.CreateEvent("event:/enemy/drone");
+                    audioSystem.PlayEventAtPosition(soundEmitter.event.value(), enemy.GetComponent<Transform>().position, enemy.GetComponent<PhysicsProxy>().currentState.linearVelocity);
+                }
+                g_entityStore.enemySoundTimer.Reset(float(rand() % 10));
+            }
+
+            // Update the sound emitter positions
+            ForEach<Transform, PhysicsProxy, SoundEmitter>(
+                [&](Transform &transform, PhysicsProxy &proxy, SoundEmitter &soundEmitter)
+                {
+                    if (soundEmitter.event)
+                    {
+                        audioSystem.SetEventPosition(soundEmitter.event.value(), transform.position, proxy.currentState.linearVelocity);
+                    }
+                },
+                g_entityStore.enemies);
+        }
     }
 
     void GameStateImpl::OnFixedUpdate(float dt, uint32_t numSteps, PhysicsWorld &physicsWorld, GameStates::PlayingState &state)
@@ -965,6 +1408,17 @@ namespace mk
 
         physicsWorld.StepSimulation(dt, numSteps);
 
+        // Player ground state
+        {
+            CharacterGroundState newGroundState = physicsWorld.GetCharacterGroundState(g_entityStore.playerEntity.GetComponent<PhysicsProxy>().bodyID);
+            CharacterGroundState &groundState = g_entityStore.playerEntity.GetComponent<PlayerMovement>().groundState;
+            if (newGroundState == CharacterGroundState::OnGround && groundState == CharacterGroundState::InAir)
+            {
+                g_entityStore.playerEntity.GetComponent<PlayerAnimations>()[PlayerAnimationType::JumpAnimation].time = 0.0f;
+            }
+            groundState = newGroundState;
+        }
+
         // Physics system
         {
             ForEach<Transform, PhysicsProxy>(
@@ -979,10 +1433,32 @@ namespace mk
                 g_entityStore.enemies);
         }
 
-        // Projectiles removal system
+        // Projectiles trail system
         {
-            Filter<Transform, PhysicsProxy, Renderable, Lifetime>(
-                [&](Transform &transform, PhysicsProxy &proxy, Renderable &renderable, Lifetime &lifetime) -> bool
+            ForEach<Transform, PhysicsProxy, ProjectileType>(
+                [&](Transform &transform, PhysicsProxy &proxy, ProjectileType &type)
+                {
+                    switch (type)
+                    {
+                    case ProjectileType::Rocket:
+                        ParticleHelper::SpawnSpark(
+                            g_entityStore.particleJobs,
+                            transform.position,
+                            // Purple
+                            glm::vec4(glm::vec3(0.5f, 0.0f, 0.5f) * 10.0f, 1.0f),
+                            glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+                        break;
+                    default:
+                        break;
+                    }
+                },
+                g_entityStore.projectiles);
+        }
+
+        // Projectiles hit system
+        {
+            Filter<ProjectileType, Transform, PhysicsProxy, Renderable>(
+                [&](ProjectileType &type, Transform &transform, PhysicsProxy &proxy, Renderable &renderable) -> bool
                 {
                     const auto &contacts = physicsWorld.GetContacts(proxy.bodyID);
 
@@ -990,21 +1466,73 @@ namespace mk
                     {
                         for (const auto &contact : contacts)
                         {
-                            g_entityStore.damageEvents[contact.body] += 10.0f;
+                            if (contact.body == g_entityStore.floorBodyID && physicsWorld.GetObjectLayer(proxy.bodyID) == ObjectLayer::PlayerProjectile)
+                            {
+                                int32_t tileIndex = GetTileIndex(contact.position);
+                                if (tileIndex != -1)
+                                {
+                                    g_entityStore.tiles[tileIndex].corruption = 0.0f; // glm::clamp(g_entityStore.tileCorruption[tileIndex] - 0.1f, 0.0f, 1.0f);
+                                    g_entityStore.tiles[tileIndex].reset = 1.0f;
+                                }
+
+                                if (type == ProjectileType::Rocket)
+                                {
+                                    std::vector<int32_t> hitTiles = GetTilesInRadius(contact.position, 500.0f);
+                                    for (auto &tileIndex : hitTiles)
+                                    {
+                                        g_entityStore.tiles[tileIndex].corruption = 0.0f; // glm::clamp(g_entityStore.tileCorruption[tileIndex] - 0.1f, 0.0f, 1.0f);
+                                        g_entityStore.tiles[tileIndex].reset = 1.0f;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                constexpr EnumArray<ProjectileType, float> c_damageValues = {
+                                    20.0f,  // PlasmaBullet
+                                    150.0f, // Rocket
+                                    10.0f,  // EnemyBullet
+                                };
+
+                                g_entityStore.damageEvents[contact.body] += c_damageValues[type];
+                            }
+
+                            switch (type)
+                            {
+                            case ProjectileType::EnemyBullet:
+                                ParticleHelper::SpawnImpactEffect(g_entityStore.particleJobs, contact.position, -contact.normal, glm::vec4(10.0f, 0.0f, 0.0f, 1.0f));
+                                break;
+                            case ProjectileType::PlasmaBullet:
+                                ParticleHelper::SpawnImpactEffect(g_entityStore.particleJobs, contact.position, -contact.normal, glm::vec4(0.0f, 5.0f, 10.0f, 1.0f));
+                                break;
+                            case ProjectileType::Rocket:
+                            {
+                                constexpr float c_radius = 500.0f;
+                                constexpr float c_explosionStrength = 2000.0f;
+                                constexpr float c_falloffFactor = 0.5f * c_radius;
+                                ParticleHelper::SpawnIceExplosionEffect(g_entityStore.particleJobs, contact.position);
+                                Application::GetAudioSystem().PlayEventAtPosition("event:/explosion", contact.position, glm::vec3(0.0f));
+                                std::vector<BodyID> hitBodies = physicsWorld.CastSphere(contact.position, c_radius);
+                                for (auto &hitBody : hitBodies)
+                                {
+                                    if (hitBody != proxy.bodyID)
+                                    {
+                                        glm::vec3 position = physicsWorld.GetPosition(hitBody);
+                                        float distance = glm::length(position - contact.position);
+                                        float falloff = 1.0f / (1.0f + glm::pow(distance / c_falloffFactor, 2.0f));
+
+                                        g_entityStore.damageEvents[hitBody] += 200.0f * falloff;
+                                        physicsWorld.SetLinearVelocity(
+                                            hitBody,
+                                            (glm::normalize(position - contact.position) + glm::vec3(0.0f, 0.5f, 0.0f)) * c_explosionStrength * falloff);
+                                    }
+                                }
+                            }
+                            break;
+                            default:
+                                break;
+                            }
                         }
 
-                        physicsWorld.RemoveRigidBody(proxy.bodyID);
-                        return true;
-                    }
-
-                    if (transform.position.y < -1000.0f)
-                    {
-                        physicsWorld.RemoveRigidBody(proxy.bodyID);
-                        return true;
-                    }
-
-                    if (lifetime.timer.Tick(dt))
-                    {
                         physicsWorld.RemoveRigidBody(proxy.bodyID);
                         return true;
                     }
@@ -1013,18 +1541,56 @@ namespace mk
                 },
                 g_entityStore.projectiles);
         }
+
+        // Lifetime system
+        {
+            Filter<Transform, PhysicsProxy, Lifetime>(
+                [&](Transform &transform, PhysicsProxy &proxy, Lifetime &lifetime) -> bool
+                {
+                    if (lifetime.timer.Tick(dt))
+                    {
+                        physicsWorld.RemoveRigidBody(proxy.bodyID);
+                        return true;
+                    }
+
+                    // also check not out of bounds in y
+                    if (transform.position.y < -2000.0f || transform.position.y > 5000.0f)
+                    {
+                        physicsWorld.RemoveRigidBody(proxy.bodyID);
+                        return true;
+                    }
+
+                    return false;
+                },
+                g_entityStore.staticEntities,
+                g_entityStore.projectiles);
+        }
     }
 
     void GameStateImpl::OnRender(Vultron::SceneRenderer &renderer, GameStates::PlayingState &state)
     {
         std::array<PointLightData, 4> pointsLights = {};
 
-        ForEach<Transform, CameraSocket>(
-            [&](Transform &transform, CameraSocket &socket)
+        ForEach<Transform, CameraSocket, CameraShakes>(
+            [&](Transform &transform, CameraSocket &socket, CameraShakes &shakes)
             {
+                float time = Application::GetTimeSinceStart();
+                glm::quat shakeRotation = glm::identity<glm::quat>();
+                glm::vec3 shakePosition = glm::vec3(0.0f);
+
+                for (auto &shake : shakes)
+                {
+                    float t = glm::pow(glm::clamp(1.0f - shake.time / shake.duration, 0.0f, 1.0f), 3.0f);
+                    float yaw = t * shake.yaw * PerlinNoiseHelper::Perlin(time * shake.frequency, 0.0f, 0);
+                    float pitch = t * shake.pitch * PerlinNoiseHelper::Perlin(time * shake.frequency, 0.0f, 1);
+
+                    shakeRotation = glm::rotate(shakeRotation, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                    shakeRotation = glm::rotate(shakeRotation, pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+                }
+
                 renderer.SetCamera({
-                    .position = transform.position,
-                    .rotation = transform.rotation,
+                    .position = transform.position + shakePosition,
+                    .rotation = transform.rotation * shakeRotation,
                     .fov = socket.fov,
                 });
             },
@@ -1042,15 +1608,15 @@ namespace mk
                     .color = renderable.color,
                 });
             },
-            g_entityStore.weaponEntity,
+            GetCurrentPlayerWeapon(),
             g_entityStore.staticEntities,
             g_entityStore.projectiles,
             g_entityStore.enemies);
 
         // Muzzle flash light
         {
-            auto &weaponTransform = g_entityStore.weaponEntity.GetComponent<Transform>();
-            auto &weaponFireAction = g_entityStore.weaponEntity.GetComponent<WeaponFireAction>();
+            auto &weaponTransform = GetCurrentPlayerWeapon().GetComponent<Transform>();
+            auto &weaponFireAction = GetCurrentPlayerWeapon().GetComponent<WeaponFireAction>();
 
             if (weaponFireAction.fireTimer.IsRunning())
             {
@@ -1085,52 +1651,74 @@ namespace mk
                 g_entityStore.staticEntities,
                 g_entityStore.projectiles,
                 g_entityStore.enemies);
+
+            const auto &collision = physicsWorld.GetCollisionData(g_entityStore.floorBodyID);
+            if (collision.has_value())
+            {
+                PhysicsRenderingHelper::RenderCollision(renderer, glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), collision.value());
+            }
         }
 
-        float corruptedAmount = 0.0f;
-        // for (int32_t x = -c_tilesPerRow / 2; x < c_tilesPerRow / 2; x++)
-        // {
-        //     for (int32_t z = -c_tilesPerRow / 2; z < c_tilesPerRow / 2; z++)
-        //     {
-        //         uint32_t hash = (x * 73856093) ^ (z * 19349663);
-        //         uint32_t hash2 = hash ^ 0x5f3759df;
-        //         uint32_t hash3 = (hash2 >> 16) ^ (hash2 << 16);
-        //         bool isCorrupted = hash3 % 5 == 0;
-        //         if (isCorrupted)
-        //         {
-        //             corruptedAmount += 1.0f;
-        //         }
-        //     }
-        // }
-        // corruptedAmount /= c_tilesPerRow * c_tilesPerRow;
+        float totalCorruption = 0.0f;
+        for (auto &tile : g_entityStore.tiles)
+        {
+            totalCorruption += tile.corruption;
+        }
+        totalCorruption /= g_entityStore.tiles.size();
 
         float timeSinceStart = Application::GetTimeSinceStart();
-        for (int32_t x = -c_tilesPerRow / 2; x < c_tilesPerRow / 2; x++)
+        for (int32_t i = 0; i < g_entityStore.tiles.size(); i++)
         {
-            for (int32_t z = -c_tilesPerRow / 2; z < c_tilesPerRow / 2; z++)
+            glm::vec3 tilePosition = GetTilePosition(i);
+            // Hash the x and z values to get a unique value
+            Tile &tile = g_entityStore.tiles[i];
+            float corruption = tile.corruption;
+            bool isCorrupted = corruption > 0.0f;
+
+            uint32_t hash = i ^ 0x5f3759df;
+            uint32_t hash2 = hash ^ 0x5f3759df;
+            uint32_t hash3 = (hash2 >> 16) ^ (hash2 << 16);
+
+            float time = glm::mix(totalCorruption, 1.0f, 2.0f) * timeSinceStart;
+
+            glm::vec3 corruptColor = glm::mix(
+                glm::vec4(c_corruptionBeginColor, 1.0f),
+                glm::vec4(c_corruptionEndColor, 1.0f),
+                glm::pow(corruption, 4));
+
+            float reset = glm::mix(1.0f, 10.0f, glm::pow(tile.reset, 3.0f));
+            renderer.SubmitRenderJob(StaticRenderJob{
+                .mesh = GetHandle(MK_ASSET_PATH("models/floor/floor.dat")),
+                .material = !isCorrupted ? GetHandle("FloorMaterial") : GetHandle("FloorCorruptedMaterial"),
+                .transform = glm::translate(glm::mat4(1.0f), tilePosition) *
+                             glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                             glm::rotate(glm::mat4(1.0f), glm::radians((hash % 4) * 90.0f), glm::vec3(0.0f, 0.0f, 1.0f)) *
+                             glm::scale(glm::mat4(1.0f), glm::vec3(c_tileScale)),
+                .texCoord = isCorrupted ? glm::vec2(glm::sin(time * 2.0f + glm::radians(float(hash3 % 360))), glm::cos(time * glm::mix(corruption, 0.25f, 1.0f) * 2.0f + glm::radians(float(hash2 % 360)))) : glm::vec2(0.0f),
+                .color = glm::vec4(isCorrupted ? corruptColor : glm::vec3(reset), 1.0f),
+                .emissiveColor = glm::vec4(isCorrupted ? corruptColor * 5.0f : glm::vec3(reset), 1.0f),
+            });
+
+            // Pick a random point in the tile and spawn a particle
+            if constexpr (false)
             {
-                // Hash the x and z values to get a unique value
-                uint32_t hash = (x * 73856093) ^ (z * 19349663);
-                uint32_t hash2 = hash ^ 0x5f3759df;
-                uint32_t hash3 = (hash2 >> 16) ^ (hash2 << 16);
-                bool isCorrupted = hash3 % 5 == 0;
-
-                float time = glm::mix(corruptedAmount, 1.0f, 2.0f) * timeSinceStart;
-
-                glm::vec3 tilePosition = glm::vec3(x * c_tileSize * c_tileScale, glm::sin(glm::radians(float(hash2 % 360)) + time) * 10.0f * corruptedAmount, z * c_tileSize * c_tileScale);
-
-                renderer.SubmitRenderJob(StaticRenderJob{
-                    .mesh = GetHandle(MK_ASSET_PATH("models/floor/floor.dat")),
-                    .material = !isCorrupted ? GetHandle("FloorMaterial") : GetHandle("FloorCorruptedMaterial"),
-                    .transform = glm::translate(glm::mat4(1.0f), tilePosition) *
-                                 glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
-                                 glm::rotate(glm::mat4(1.0f), glm::radians((hash % 4) * 90.0f), glm::vec3(0.0f, 0.0f, 1.0f)) *
-                                 glm::scale(glm::mat4(1.0f), glm::vec3(c_tileScale)),
-                    .texCoord = isCorrupted ? glm::vec2(glm::sin(time * 2.0f + glm::radians(float(hash3 % 360))), glm::cos(time * 2.0f + glm::radians(float(hash2 % 360)))) : glm::vec2(0.0f),
-                });
-
-                // Pick random position in tile
+                // Plus minus half the tile size
+                glm::vec3 position = tilePosition + glm::vec3(
+                                                        (rand() % 1000) / 1000.0f - 0.5f,
+                                                        0.0f,
+                                                        (rand() % 1000) / 1000.0f - 0.5f) *
+                                                        c_tileSize * c_tileScale;
+                // ParticleHelper::SpawnSpark(g_entityStore.particleJobs, position);
             }
+        }
+
+        // Render tree
+        {
+            renderer.SubmitRenderJob(StaticRenderJob{
+                .mesh = GetHandle(MK_ASSET_PATH("models/tree/tree.dat")),
+                .material = GetHandle("FloorMaterial"),
+                .transform = glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+            });
         }
 
         // Render stamina bar
@@ -1144,6 +1732,27 @@ namespace mk
                 .material = GetHandle("WhiteSpriteMaterial"),
                 .position = position, // + glm::vec2(stamina * 0.1f - 0.1f, 0.0f),
                 .size = size * glm::vec2(stamina, 1.0f),
+                .zOrder = 1.0f,
+            });
+
+            renderer.SubmitRenderJob(SpriteRenderJob{
+                .material = GetHandle("WhiteSpriteMaterial"),
+                .position = position, // + glm::vec2(stamina * 0.1f - 0.1f, 0.0f),
+                .size = size,
+                .color = glm::vec4(0.5f, 0.5f, 0.5f, 0.5f),
+            });
+        }
+
+        // Render corruption bar
+        {
+            glm::vec2 position = glm::vec2(0.0f, -0.85f);
+            glm::vec2 size = glm::vec2(0.3f, 0.02f);
+
+            renderer.SubmitRenderJob(SpriteRenderJob{
+                .material = GetHandle("WhiteSpriteMaterial"),
+                .position = position, // + glm::vec2(stamina * 0.1f - 0.1f, 0.0f),
+                .size = size * glm::vec2(totalCorruption, 1.0f),
+                .color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
                 .zOrder = 1.0f,
             });
 
@@ -1172,26 +1781,74 @@ namespace mk
             });
         }
 
-        // Debug point lights
-        if (false)
+        // Render blood hud
         {
-            for (int i = 0; i < pointsLights.size(); i++)
+            // Blood texture over the entire with opacity based on health
+            float health = g_entityStore.playerEntity.GetComponent<Health>().current;
+            float maxHealth = g_entityStore.playerEntity.GetComponent<Health>().max;
+            float healthPercentage = glm::pow(1.0f - health / maxHealth, 3);
+
+            const CameraShake &cameraShake = g_entityStore.cameraEntity.GetComponent<CameraShakes>()[CameraShakeType::Damage];
+            float trauma = glm::min(1.0f, glm::pow(1.0f - cameraShake.time / cameraShake.duration, 2.0f) * 2.0f);
+
+            glm::vec2 position = glm::vec2(0.0f, 0.0f);
+            glm::vec2 size = glm::vec2(2.0f);
+
+            renderer.SubmitRenderJob(SpriteRenderJob{
+                .material = GetHandle("BloodHudMaterial"),
+                .position = position,
+                .size = size,
+                .color = glm::vec4(1.0f, 1.0f, 1.0f, glm::mix(trauma, 1.0f, healthPercentage)),
+                .zOrder = 1.0f,
+            });
+
+            UIHelper::RenderText(renderer, c_fontAtlasHandle, c_fontMaterialHandle, std::to_string(static_cast<int>(health)),
+                                 glm::vec2(-0.65f, -0.125f), 0.5f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), TextAlignment::Left);
+        }
+
+        // Particle emitters
+        {
+            for (auto &job : g_entityStore.particleJobs)
             {
-                auto &pointLight = pointsLights[i];
-                if (pointLight.radius > 0.0f)
-                {
-                    renderer.SubmitRenderJob(StaticRenderJob{
-                        .mesh = GetHandle(MK_ASSET_PATH("models/sphere.dat")),
-                        .material = GetHandle("WhiteMaterial"),
-                        .transform = glm::translate(glm::mat4(1.0f), pointLight.position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f)),
-                        .color = pointLight.color,
-                    });
-                }
+                renderer.SubmitRenderJob(job);
             }
+
+            g_entityStore.particleJobs.clear();
         }
 
         renderer.SetPointLights(pointsLights);
-        renderer.SetDeltaTime(Application::GetDeltaTime());
+        renderer.SetDeltaTime(Application::GetDeltaTime() * Application::GetTimeScale());
+
+// Debug stuff
+#if 0
+
+        // Debug point lights
+        for (int i = 0; i < pointsLights.size(); i++)
+        {
+            auto &pointLight = pointsLights[i];
+            if (pointLight.radius > 0.0f)
+            {
+                renderer.SubmitRenderJob(StaticRenderJob{
+                    .mesh = GetHandle(MK_ASSET_PATH("models/sphere.dat")),
+                    .material = GetHandle("WhiteMaterial"),
+                    .transform = glm::translate(glm::mat4(1.0f), pointLight.position) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f)),
+                    .color = pointLight.color,
+                });
+            }
+        }
+
+        for (int32_t i = 0; i < g_entityStore.tileCorruption.size(); i++)
+        {
+            glm::vec3 tilePosition = GetTilePosition(i);
+            glm::vec4 color = glm::vec4(0.0f, 5.0f, 10.0f, 1.0f) * g_entityStore.tileCorruption[i];
+            renderer.SubmitRenderJob(StaticRenderJob{
+                .mesh = GetHandle(MK_ASSET_PATH("models/sphere.dat")),
+                .material = GetHandle("WhiteMaterial"),
+                .transform = glm::translate(glm::mat4(1.0f), tilePosition) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f)),
+                .color = color,
+            });
+        }
+#endif
     }
 
     void GameStateImpl::OnExit(GameStates::PlayingState &state)
@@ -1200,8 +1857,14 @@ namespace mk
         renderer.SetSkybox(std::nullopt);
         renderer.SetEnvironmentMap(std::nullopt);
 
+        auto &audioSystem = Application::GetAudioSystem();
+        audioSystem.ReleaseEvent(g_entityStore.ambienceEvent);
+
         auto &eventBus = Application::GetEventBus();
         eventBus.Unsubscribe(EventBus::Domain::Scene);
+
+        auto &physicsWorld = Application::GetPhysicsWorld();
+        physicsWorld.RemoveAllRigidBodies();
     }
 
     GameStateMachine::OptionalState GameStateImpl::TransitionTo(const GameStates::PlayingState &state)
