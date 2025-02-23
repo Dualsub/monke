@@ -104,6 +104,7 @@ namespace mk
         glm::vec3 GetLinearVelocity(BodyID id);
         OptionalCollisionData GetCollisionData(BodyID id) const { return m_collisions.find(id) != m_collisions.end() ? std::make_optional(m_collisions.at(id)) : std::nullopt; }
         bool IsBodyValid(BodyID id) const { return m_bodyIDs.find(id) != m_bodyIDs.end(); }
+        ObjectLayer GetObjectLayer(BodyID id) const;
 
         BodyID CreateRigidBody(const RigidBodySettings &info, BodyType type);
         void UpdateRigidBody(BodyID id, RigidBodySettings &info);
@@ -115,6 +116,7 @@ namespace mk
         void SetLinearVelocity(BodyID id, glm::vec3 velocity);
         void SetAngularVelocity(BodyID id, glm::vec3 velocity);
         void ApplyImpulse(BodyID id, const glm::vec3 &impulse);
+        void SetGravityFactor(BodyID id, float factor);
 
         CharacterGroundState GetCharacterGroundState(BodyID id);
         void SetCharacterRotation(BodyID id, glm::quat rotation);
@@ -126,5 +128,6 @@ namespace mk
         void ResetContacts();
 
         std::vector<RaycastResult> Raycast(const glm::vec3 &from, const glm::vec3 &direction, float distance, RaycastType type = RaycastType::Closest) const;
+        std::vector<BodyID> CastSphere(const glm::vec3 &center, float radius) const;
     };
 }

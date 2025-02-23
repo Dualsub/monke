@@ -52,4 +52,16 @@ namespace mk::JoltHelpers
         return inValue * spaceScale;
     }
 
+    template <typename T>
+    inline T ToJolt(const T &inValue)
+    {
+        return inValue * spaceScaleInv;
+    }
+
+    template <typename T>
+    inline T FromJolt(const T &inValue)
+    {
+        return inValue * spaceScale;
+    }
+
 }

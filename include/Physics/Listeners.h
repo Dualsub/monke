@@ -11,11 +11,14 @@
 
 namespace mk
 {
+    // Forward declaration
+    enum class ObjectLayer : uint32_t;
 
     struct Contact
     {
         BodyID body;
         uint32_t data;
+        ObjectLayer layer;
         glm::vec3 position;
         glm::vec3 normal;
         float penetration;
@@ -79,8 +82,8 @@ namespace mk
                 m_contacts[bodyId2] = std::vector<Contact>();
             }
 
-            m_contacts[bodyId1].emplace_back(Contact{bodyId2, body2Data.data, position, normal, penetration});
-            m_contacts[bodyId2].emplace_back(Contact{bodyId1, body1Data.data, position, -normal, penetration});
+            m_contacts[bodyId1].emplace_back(Contact{bodyId2, body2Data.data, ObjectLayer(inBody2.GetObjectLayer()), position, normal, penetration});
+            m_contacts[bodyId2].emplace_back(Contact{bodyId1, body1Data.data, ObjectLayer(inBody1.GetObjectLayer()), position, -normal, penetration});
 
             m_mutex.unlock();
         }

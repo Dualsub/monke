@@ -173,6 +173,23 @@ namespace mk::PhysicsRenderingHelper
         }
     }
 
+    void RenderShape(SceneRenderer &renderer, const glm::vec3 &position, const glm::quat &rotation, const MeshShape &meshShape, const glm::vec4 &color)
+    {
+        const std::vector<glm::vec3> &vertices = meshShape.GetVertices();
+        const std::vector<uint32_t> &indices = meshShape.GetIndices();
+
+        for (size_t i = 0; i < indices.size(); i += 3)
+        {
+            glm::vec3 point1 = glm::rotate(rotation, vertices[indices[i]]) + position;
+            glm::vec3 point2 = glm::rotate(rotation, vertices[indices[i + 1]]) + position;
+            glm::vec3 point3 = glm::rotate(rotation, vertices[indices[i + 2]]) + position;
+
+            renderer.SubmitRenderJob({point1, point2, color});
+            renderer.SubmitRenderJob({point2, point3, color});
+            renderer.SubmitRenderJob({point3, point1, color});
+        }
+    }
+
     void RenderCollision(SceneRenderer &renderer, const glm::vec3 &position, const glm::quat &rotation, const CollisionData &collision)
     {
         glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);

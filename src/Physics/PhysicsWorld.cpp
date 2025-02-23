@@ -123,6 +123,14 @@ namespace mk
         return JoltHelpers::ConvertWithUnits(linearVelocity);
     }
 
+    ObjectLayer PhysicsWorld::GetObjectLayer(BodyID id) const
+    {
+        JPH::BodyInterface &interface = m_physicsSystem->GetBodyInterfaceNoLock();
+        JPH::BodyID bodyId = m_bodyIDs.at(id);
+        JPH::ObjectLayer layer = interface.GetObjectLayer(bodyId);
+        return static_cast<ObjectLayer>(layer);
+    }
+
     BodyID PhysicsWorld::CreateRigidBody(const RigidBodySettings &info, BodyType type)
     {
         assert(m_nextBodyID < std::numeric_limits<BodyID>::max() && "BodyID overflow");
@@ -260,7 +268,14 @@ namespace mk
     {
         JPH::BodyInterface &interface = m_physicsSystem->GetBodyInterfaceNoLock();
         JPH::BodyID bodyId = m_bodyIDs[id];
-        interface.AddImpulse(bodyId, JoltHelpers::ConvertWithUnits(impulse));
+        interface.AddForce(bodyId, JoltHelpers::ConvertWithUnits(impulse));
+    }
+
+    void PhysicsWorld::SetGravityFactor(BodyID id, float factor)
+    {
+        JPH::BodyInterface &interface = m_physicsSystem->GetBodyInterfaceNoLock();
+        JPH::BodyID bodyId = m_bodyIDs[id];
+        interface.SetGravityFactor(bodyId, factor);
     }
 
     CharacterGroundState PhysicsWorld::GetCharacterGroundState(BodyID id)
@@ -326,6 +341,7 @@ namespace mk
                 raycastResult.position = JoltHelpers::ConvertWithUnits(ray.GetPointOnRay(hit.mFraction));
                 raycastResult.distance = hit.mFraction * distance;
                 auto userDataBits = interface.GetUserData(hit.mBodyID);
+                JPH::ObjectLayer layer = interface.GetObjectLayer(hit.mBodyID);
                 UserData userData = *reinterpret_cast<UserData *>(&userDataBits);
                 raycastResult.hitBody = userData.id;
                 raycastResult.data = userData.data;
@@ -357,5 +373,26 @@ namespace mk
         }
 
         return raycastResults;
+    }
+
+    std::vector<BodyID> PhysicsWorld::CastSphere(const glm::vec3 &center, float radius) const
+    {
+        std::vector<BodyID> bodies;
+        const auto &query = m_physicsSystem->GetBroadPhaseQuery();
+        auto &interface = m_physicsSystem->GetBodyInterfaceNoLock();
+        JPH::AllHitCollisionCollector<JPH::CollideShapeBodyCollector> collector;
+        query.CollideSphere(JoltHelpers::ConvertWithUnits(center), JoltHelpers::ToJolt(radius), collector);
+        if (collector.HadHit())
+        {
+            bodies.reserve(collector.mHits.size());
+            for (auto &bodyID : collector.mHits)
+            {
+                auto userDataBits = interface.GetUserData(bodyID);
+                UserData userData = *reinterpret_cast<UserData *>(&userDataBits);
+                bodies.push_back(userData.id);
+            }
+        }
+
+        return bodies;
     }
 }
