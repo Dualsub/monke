@@ -174,6 +174,62 @@ namespace mk
         eventInstance->release();
     }
 
+    void AudioSystem::PlayEventAtPosition(EventHandle event, const glm::vec3 &position, const glm::vec3 &velocity)
+    {
+        auto eventInstanceIt = m_events.find(event);
+        if (eventInstanceIt == m_events.end())
+        {
+            std::cerr << "Event not found: " << event << std::endl;
+            return;
+        }
+
+        FMOD::Studio::EventInstance *eventInstance = eventInstanceIt->second;
+
+        FMOD_3D_ATTRIBUTES attributes = {};
+        glm::vec3 convertedPosition = position * c_unitConversion;
+        attributes.position = {convertedPosition.x, convertedPosition.y, convertedPosition.z};
+
+        glm::vec3 convertedVelocity = velocity * c_unitConversion;
+        attributes.velocity = {convertedVelocity.x, convertedVelocity.y, convertedVelocity.z};
+
+        FMOD_RESULT result = eventInstance->set3DAttributes(&attributes);
+        if (result != FMOD_OK)
+        {
+            std::cerr << "Failed to set 3D attributes for event: " << event << std::endl;
+        }
+
+        result = eventInstance->start();
+        if (result != FMOD_OK)
+        {
+            std::cerr << "Failed to start event: " << event << std::endl;
+        }
+    }
+
+    void AudioSystem::SetEventPosition(EventHandle event, const glm::vec3 &position, const glm::vec3 &velocity)
+    {
+        auto eventInstanceIt = m_events.find(event);
+        if (eventInstanceIt == m_events.end())
+        {
+            std::cerr << "Event not found: " << event << std::endl;
+            return;
+        }
+
+        FMOD::Studio::EventInstance *eventInstance = eventInstanceIt->second;
+
+        FMOD_3D_ATTRIBUTES attributes = {};
+        glm::vec3 convertedPosition = position * c_unitConversion;
+        attributes.position = {convertedPosition.x, convertedPosition.y, convertedPosition.z};
+
+        glm::vec3 convertedVelocity = velocity * c_unitConversion;
+        attributes.velocity = {convertedVelocity.x, convertedVelocity.y, convertedVelocity.z};
+
+        FMOD_RESULT result = eventInstance->set3DAttributes(&attributes);
+        if (result != FMOD_OK)
+        {
+            std::cerr << "Failed to set 3D attributes for event: " << event << std::endl;
+        }
+    }
+
     void AudioSystem::SetEventParameter(EventHandle event, const std::string &parameter, float value)
     {
         auto eventInstanceIt = m_events.find(event);

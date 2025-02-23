@@ -53,6 +53,8 @@ namespace mk
         void PlayEvent(const std::string &eventPath);
         void PlayEvent(EventHandle event);
         void PlayEventAtPosition(const std::string &eventPath, const glm::vec3 &position, const glm::vec3 &velocity = glm::vec3(0.0f));
+        void PlayEventAtPosition(EventHandle event, const glm::vec3 &position, const glm::vec3 &velocity = glm::vec3(0.0f));
+        void SetEventPosition(EventHandle event, const glm::vec3 &position, const glm::vec3 &velocity = glm::vec3(0.0f));
         void SetEventParameter(EventHandle event, const std::string &parameter, float value);
         void StopEvent(EventHandle event, bool allowFadeOut = true);
         void ReleaseEvent(EventHandle event);
