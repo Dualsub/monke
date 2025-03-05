@@ -30,10 +30,14 @@ add_executable(monke WIN32
     src/UI/UIHelper.cpp
 
     src/Game/StateMachines/GameStateMachine.cpp
+    #place statemachines
 
     src/Game/Helpers/ParticleHelper.cpp
     src/Game/Helpers/PerlinNoiseHelper.cpp
     src/Game/Helpers/PhysicsRenderingHelper.cpp
+    #place helpers
+
+    #place processors
 )
 
 target_link_libraries(monke PRIVATE Vultron Jolt fmod)
@@ -64,4 +68,4 @@ endif()
 message(STATUS "MK_ASSETS_DIR: ${MK_ASSET_DIR}")
 
 target_compile_definitions(monke PUBLIC MK_VERSION="${VERSION}"  $<$<CONFIG:Debug>:DEBUG> MK_ASSETS_DIR="${MK_ASSET_DIR}")
-target_compile_definitions(Vultron PUBLIC VLT_ENABLE_VALIDATION_LAYERS=1 VLT_ASSETS_DIR="${VLT_ASSET_DIR}")
+target_compile_definitions(Vultron PUBLIC VLT_ENABLE_VALIDATION_LAYERS=0 VLT_ASSETS_DIR="${VLT_ASSET_DIR}")
