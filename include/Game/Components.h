@@ -57,6 +57,7 @@ namespace mk
         RenderHandle material = c_invalidHandle;
         glm::mat4 renderMatrix = glm::mat4(1.0f);
         glm::vec4 color = glm::vec4(1.0f);
+        glm::vec4 emissive = glm::vec4(1.0f);
         glm::vec2 uvOffset = glm::vec2(0.0f);
         glm::vec2 uvScale = glm::vec2(1.0f);
     };
@@ -128,6 +129,7 @@ namespace mk
     {
         std::optional<glm::vec3> target = std::nullopt;
         DynamicTimer shootTimer = DynamicTimer(false);
+        bool isAttacking = false;
     };
 
     struct SoundEmitter

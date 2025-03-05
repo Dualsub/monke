@@ -136,6 +136,9 @@ namespace mk
             action |= value;
         }
 
+        // Any key
+        state.Set(glfwGetKey(window, GLFW_KEY_UNKNOWN) == GLFW_PRESS, InputActionType::AnyKey);
+
         // If we have any action, we are using the keyboard and not the gamepad
         if (action)
         {

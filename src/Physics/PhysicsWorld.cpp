@@ -125,6 +125,9 @@ namespace mk
 
     ObjectLayer PhysicsWorld::GetObjectLayer(BodyID id) const
     {
+        if (m_collisions.find(id) == m_collisions.end())
+            return ObjectLayer::None;
+
         JPH::BodyInterface &interface = m_physicsSystem->GetBodyInterfaceNoLock();
         JPH::BodyID bodyId = m_bodyIDs.at(id);
         JPH::ObjectLayer layer = interface.GetObjectLayer(bodyId);

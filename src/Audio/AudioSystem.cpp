@@ -156,7 +156,7 @@ namespace mk
         glm::vec3 convertedVelocity = velocity * c_unitConversion;
         attributes.position = {convertedPosition.x, convertedPosition.y, convertedPosition.z};
         attributes.velocity = {convertedVelocity.x, convertedVelocity.y, convertedVelocity.z};
-        attributes.forward = {0.0f, 0.0f, 1.0f};
+        attributes.forward = {0.0f, 0.0f, -1.0f};
         attributes.up = {0.0f, 1.0f, 0.0f};
 
         result = eventInstance->set3DAttributes(&attributes);
@@ -192,6 +192,9 @@ namespace mk
         glm::vec3 convertedVelocity = velocity * c_unitConversion;
         attributes.velocity = {convertedVelocity.x, convertedVelocity.y, convertedVelocity.z};
 
+        attributes.forward = {0.0f, 0.0f, -1.0f};
+        attributes.up = {0.0f, 1.0f, 0.0f};
+
         FMOD_RESULT result = eventInstance->set3DAttributes(&attributes);
         if (result != FMOD_OK)
         {
@@ -222,6 +225,9 @@ namespace mk
 
         glm::vec3 convertedVelocity = velocity * c_unitConversion;
         attributes.velocity = {convertedVelocity.x, convertedVelocity.y, convertedVelocity.z};
+
+        attributes.forward = {0.0f, 0.0f, -1.0f};
+        attributes.up = {0.0f, 1.0f, 0.0f};
 
         FMOD_RESULT result = eventInstance->set3DAttributes(&attributes);
         if (result != FMOD_OK)
@@ -278,6 +284,25 @@ namespace mk
 
         eventInstanceIt->second->release();
         m_events.erase(eventInstanceIt);
+    }
+
+    void AudioSystem::StopAllEvents(bool allowFadeOut)
+    {
+        FMOD_STUDIO_STOP_MODE stopMode = allowFadeOut ? FMOD_STUDIO_STOP_ALLOWFADEOUT : FMOD_STUDIO_STOP_IMMEDIATE;
+        for (const auto &eventInstance : m_events)
+        {
+            eventInstance.second->stop(stopMode);
+        }
+    }
+
+    void AudioSystem::ReleaseAllEvents()
+    {
+        for (const auto &eventInstance : m_events)
+        {
+            eventInstance.second->release();
+        }
+
+        m_events.clear();
     }
 
     void AudioSystem::SetListenerState(const glm::vec3 &position, const glm::quat &rotation, const glm::vec3 &velocity)

@@ -21,15 +21,18 @@ namespace mk
     struct PersistentData
     {
         // Add persistent data here
+        float highScore = -1.0f;
 
         void Read(std::fstream &file)
         {
             // Read persistent data from file
+            file.read(reinterpret_cast<char *>(&highScore), sizeof(highScore));
         }
 
         void Write(std::fstream &file)
         {
             // Write persistent data to file
+            file.write(reinterpret_cast<char *>(&highScore), sizeof(highScore));
         }
     };
 

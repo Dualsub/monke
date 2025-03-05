@@ -58,6 +58,8 @@ namespace mk
         void SetEventParameter(EventHandle event, const std::string &parameter, float value);
         void StopEvent(EventHandle event, bool allowFadeOut = true);
         void ReleaseEvent(EventHandle event);
+        void StopAllEvents(bool allowFadeOut = true);
+        void ReleaseAllEvents();
 
         void SetListenerState(const glm::vec3 &position, const glm::quat &rotation, const glm::vec3 &velocity);
     };

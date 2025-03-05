@@ -32,6 +32,8 @@ namespace mk
         NextOption,
         PreviousOption,
 
+        AnyKey,
+
         DebugOption1,
         DebugOption2,
         DebugOption3,
